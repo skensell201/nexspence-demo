@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexspence — Interactive Architecture</title>
+<style>
+:root {
+  --bg:        #070b14;
+  --bg2:       #0d1424;
+  --bg3:       #111827;
+  --glass:     rgba(255,255,255,0.04);
+  --border:    rgba(255,255,255,0.07);
+  --border-hi: rgba(59,130,246,0.4);
+  --blue:      #3b82f6;
+  --blue-dim:  #1d4ed8;
+  --blue-glow: rgba(59,130,246,0.25);
+  --green:     #22c55e;
+  --amber:     #f59e0b;
+  --red:       #ef4444;
+  --purple:    #a78bfa;
+  --cyan:      #22d3ee;
+  --text:      #e2e8f0;
+  --text-dim:  #94a3b8;
+  --text-mute: #475569;
+  --radius:    14px;
+  --radius-sm: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "SF Pro Display", "Segoe UI", sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(37,99,235,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139,92,246,0.07) 0%, transparent 55%);
+}
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: linear-gradient(180deg,#3b82f6,#1d4ed8); border-radius: 3px; }
+
+/* ── Header ── */
+.header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(7,11,20,0.8);
+  backdrop-filter: blur(12px);
+  flex-shrink: 0;
+  z-index: 10;
+}
+.logo-img {
+  width: 34px; height: 34px;
+  border-radius: 9px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.header-title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+.header-sub   { font-size: 11px; color: var(--text-mute); margin-top: 1px; }
+.header-badge {
+  margin-left: auto;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+  background: rgba(59,130,246,0.12);
+  border: 1px solid rgba(59,130,246,0.3);
+  color: var(--blue);
+  padding: 3px 10px; border-radius: 20px;
+}
+.header-hint {
+  font-size: 11px; color: var(--text-mute);
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* ── 3-col body ── */
+.body {
+  display: grid;
+  grid-template-columns: 220px 1fr 260px;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* ── Left panel ── */
+.left-panel {
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: rgba(7,11,20,0.5);
+}
+.panel-section { flex-shrink: 0; padding: 14px 14px 8px; }
+.panel-section-title {
+  font-size: 9px; font-weight: 700; letter-spacing: 1.2px;
+  text-transform: uppercase; color: var(--text-mute);
+  margin-bottom: 8px;
+}
+.left-scroll { overflow-y: auto; flex: 1; }
+
+/* Action items */
+.action-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 12px; font-weight: 500;
+  color: var(--text-dim);
+  border-left: 2px solid transparent;
+  transition: all .15s;
+  user-select: none;
+}
+.action-item:hover { background: rgba(59,130,246,0.05); color: var(--text); }
+.action-item.active {
+  background: rgba(59,130,246,0.1);
+  border-left-color: var(--blue);
+  color: var(--blue);
+}
+.action-item.running { color: var(--amber); border-left-color: var(--amber); background: rgba(245,158,11,0.07); }
+.action-icon { font-size: 14px; flex-shrink: 0; line-height: 1; }
+.action-label { flex: 1; }
+.action-running-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--amber);
+  animation: runPulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes runPulse { from { opacity: 0.3; } to { opacity: 1; } }
+
+.divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* Service toggles */
+.svc-toggle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 11px; font-weight: 500;
+  color: var(--text-dim);
+  transition: all .15s;
+  user-select: none;
+}
+.svc-toggle:hover { background: rgba(255,255,255,0.02); }
+.svc-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0; transition: background .2s;
+}
+.svc-dot.up   { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+.svc-dot.down { background: var(--red);   box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+.svc-label { flex: 1; }
+.svc-status { font-size: 9px; font-weight: 600; letter-spacing: 0.3px; }
+.svc-status.up   { color: rgba(34,197,94,0.7); }
+.svc-status.down { color: var(--red); }
+
+/* ── Center: SVG canvas ── */
+.center-panel {
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+}
+#graph-svg {
+  width: 100%; height: 100%;
+  display: block;
+}
+
+/* SVG node styles */
+.svg-node rect { transition: fill .2s, stroke .2s, stroke-width .2s, filter .2s; }
+.svg-node text {
+  font-family: system-ui, -apple-system, "SF Pro Display", "Segoe UI", sans-serif;
+  font-size: 11px; font-weight: 600;
+  dominant-baseline: middle; text-anchor: middle;
+  pointer-events: none;
+}
+.svg-node.state-normal rect   { fill: rgba(255,255,255,0.04); stroke: rgba(255,255,255,0.1);  stroke-width: 1; }
+.svg-node.state-active rect   { fill: rgba(59,130,246,0.18);  stroke: #3b82f6;                stroke-width: 1.5; filter: drop-shadow(0 0 8px rgba(59,130,246,0.5)); }
+.svg-node.state-error  rect   { fill: rgba(239,68,68,0.14);   stroke: #ef4444;                stroke-width: 1.5; filter: drop-shadow(0 0 8px rgba(239,68,68,0.4)); }
+.svg-node.state-down   rect   { fill: rgba(239,68,68,0.08);   stroke: rgba(239,68,68,0.4);    stroke-width: 1;   stroke-dasharray: 4 3; }
+.svg-node.state-warn   rect   { fill: rgba(245,158,11,0.14);  stroke: #f59e0b;                stroke-width: 1.5; filter: drop-shadow(0 0 6px rgba(245,158,11,0.4)); }
+
+.svg-node.color-cyan   text { fill: #22d3ee; }
+.svg-node.color-blue   text { fill: #3b82f6; }
+.svg-node.color-purple text { fill: #a78bfa; }
+.svg-node.color-green  text { fill: #22c55e; }
+.svg-node.color-amber  text { fill: #f59e0b; }
+.svg-node.color-red    text { fill: #ef4444; }
+.svg-node.color-mute   text { fill: #64748b; }
+.svg-node.state-down   text { fill: rgba(239,68,68,0.6) !important; }
+
+/* Layer labels */
+.layer-label {
+  font-family: system-ui, sans-serif;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 1.2px; text-transform: uppercase;
+  fill: rgba(255,255,255,0.12);
+}
+
+/* Edges */
+.svg-edge { stroke: rgba(255,255,255,0.07); stroke-width: 1; fill: none; }
+.svg-edge.active { stroke: rgba(59,130,246,0.5); stroke-width: 1.5; }
+.svg-edge.error  { stroke: rgba(239,68,68,0.5);  stroke-width: 1.5; }
+
+/* Tooltip */
+.node-tooltip {
+  position: absolute;
+  background: rgba(10,16,30,0.95);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  pointer-events: none;
+  z-index: 100;
+  max-width: 280px;
+  line-height: 1.6;
+  display: none;
+  white-space: pre-line;
+}
+.node-tooltip.visible { display: block; }
+.node-tooltip-title { font-weight: 700; color: var(--text); margin-bottom: 4px; font-size: 12px; }
+
+/* ── Right panel: trace ── */
+.right-panel {
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: rgba(5,9,18,0.6);
+}
+.trace-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.trace-header-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+  color: var(--text-dim); text-transform: uppercase;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.replay-btn {
+  display: none;
+  background: rgba(59,130,246,0.1);
+  border: 1px solid rgba(59,130,246,0.3);
+  color: var(--blue);
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 10px; font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+}
+.replay-btn:hover { background: rgba(59,130,246,0.18); }
+.trace-action-name {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  margin-top: 4px;
+}
+.trace-empty {
+  padding: 24px 16px;
+  font-size: 12px; color: var(--text-mute);
+  text-align: center; line-height: 1.6;
+}
+.trace-body { overflow-y: auto; flex: 1; padding: 8px 0; }
+.trace-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 6px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  animation: traceIn .2s ease;
+}
+@keyframes traceIn { from { opacity:0; transform: translateX(-6px); } to { opacity:1; transform: none; } }
+.trace-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  margin-top: 4px; flex-shrink: 0;
+}
+.trace-dot.ok    { background: var(--green); box-shadow: 0 0 4px rgba(34,197,94,0.5); }
+.trace-dot.error { background: var(--red);   box-shadow: 0 0 4px rgba(239,68,68,0.5); }
+.trace-dot.warn  { background: var(--amber); box-shadow: 0 0 4px rgba(245,158,11,0.5); }
+.trace-dot.info  { background: var(--blue);  box-shadow: 0 0 4px rgba(59,130,246,0.5); }
+.trace-content { flex: 1; min-width: 0; }
+.trace-label  { font-size: 11px; color: var(--text); word-break: break-all; }
+.trace-detail { font-size: 10px; color: var(--text-mute); margin-top: 2px; }
+.trace-time   { font-size: 10px; color: var(--text-mute); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.trace-status-badge {
+  margin: 8px 16px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px; font-weight: 600;
+  text-align: center;
+  animation: traceIn .2s ease;
+}
+.trace-status-badge.ok    { background: rgba(34,197,94,0.1);  border: 1px solid rgba(34,197,94,0.3);  color: var(--green); }
+.trace-status-badge.error { background: rgba(239,68,68,0.1);  border: 1px solid rgba(239,68,68,0.3);  color: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <img src="assets/mini_logo.png" class="logo-img" alt="Nexspence">
+  <div>
+    <div class="header-title">Nexspence Architecture</div>
+    <div class="header-sub">Interactive request flow diagram</div>
+  </div>
+  <div class="header-badge">INTERACTIVE</div>
+  <div class="header-hint">← Select action &nbsp;·&nbsp; Toggle services to simulate failures</div>
+</div>
+
+<div class="body">
+  <div class="left-panel" id="left-panel">
+    <div class="left-scroll" id="left-scroll">
+      <!-- rendered by JS -->
+    </div>
+  </div>
+
+  <div class="center-panel" id="center-panel">
+    <svg id="graph-svg" viewBox="0 0 1060 560" preserveAspectRatio="xMidYMid meet">
+      <!-- rendered by JS -->
+    </svg>
+    <div class="node-tooltip" id="node-tooltip">
+      <div class="node-tooltip-title" id="tooltip-title"></div>
+      <div id="tooltip-body"></div>
+    </div>
+  </div>
+
+  <div class="right-panel" id="right-panel">
+    <div class="trace-header">
+      <div class="trace-header-title">
+        <span style="display:flex;align-items:center;gap:8px"><span>⚡</span> Request Trace</span>
+        <button class="replay-btn" id="replay-btn" onclick="replayAction()">↺ Replay</button>
+      </div>
+      <div class="trace-action-name" id="trace-action-name">—</div>
+    </div>
+    <div class="trace-body" id="trace-body">
+      <div class="trace-empty">Select an action from the left panel to see the request flow</div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════════════════
+const NODES = {
+  // ── Clients (y=40) ──
+  maven:   { id:'maven',   label:'Maven CLI',    layer:'clients', x:60,  y:40,  color:'cyan',   w:90,  h:30 },
+  npm:     { id:'npm',     label:'npm CLI',      layer:'clients', x:160, y:40,  color:'cyan',   w:90,  h:30 },
+  docker:  { id:'docker',  label:'Docker CLI',   layer:'clients', x:265, y:40,  color:'cyan',   w:90,  h:30 },
+  browser: { id:'browser', label:'Browser / UI', layer:'clients', x:380, y:40,  color:'cyan',   w:100, h:30 },
+  pip:     { id:'pip',     label:'pip / twine',  layer:'clients', x:495, y:40,  color:'cyan',   w:90,  h:30 },
+  cargo:   { id:'cargo',   label:'Cargo CLI',    layer:'clients', x:600, y:40,  color:'cyan',   w:90,  h:30 },
+  helm:    { id:'helm',    label:'Helm CLI',     layer:'clients', x:700, y:40,  color:'cyan',   w:90,  h:30 },
+
+  // ── HTTP (y=140) ──
+  gin: {
+    id:'gin', label:'Gin API Layer', layer:'http', x:480, y:140, color:'blue', w:140, h:34,
+    tooltip:'Middleware chain:\nRecovery → RequestLogger → CORS\n→ MetricsMiddleware → AuditMiddleware\n→ AuthMiddleware → RBACMiddleware'
+  },
+
+  // ── Services (y=242) ──
+  formatHandlers: {
+    id:'formatHandlers', label:'Format Handlers', layer:'services', x:100, y:242, color:'purple', w:115, h:30,
+    tooltip:'12 format protocols: Maven, npm, Docker, PyPI,\nGo, NuGet, Cargo, Helm, Apt, Yum, Conan, Raw\nPer-repo BlobStore routing via Registry'
+  },
+  userService:    { id:'userService',    label:'UserService',     layer:'services', x:240, y:242, color:'purple', w:100, h:30 },
+  repoService:    { id:'repoService',    label:'RepoService',     layer:'services', x:375, y:242, color:'purple', w:100, h:30 },
+  tokenService:   { id:'tokenService',   label:'TokenService',    layer:'services', x:510, y:242, color:'purple', w:100, h:30 },
+  backupService:  { id:'backupService',  label:'BackupService',   layer:'services', x:645, y:242, color:'purple', w:110, h:30,
+    tooltip:'Phase 45: Per-repo Export/Import\nExportRepo: streaming gzip-tar\nImportRepo: skip/rename conflict modes\nFull-system backup/restore'
+  },
+  webhookSvc:     { id:'webhookSvc',     label:'WebhookService',  layer:'services', x:790, y:242, color:'purple', w:110, h:30 },
+  scanService:    { id:'scanService',    label:'ScanService',     layer:'services', x:940, y:242, color:'purple', w:100, h:30 },
+
+  // ── Data (y=355) ──
+  postgres:  { id:'postgres',  label:'PostgreSQL',      layer:'data', x:310, y:355, color:'green', w:110, h:32, toggleable:true, serviceKey:'postgres' },
+  blobStore: {
+    id:'blobStore', label:'BlobStore Registry', layer:'data', x:560, y:355, color:'green', w:130, h:32, toggleable:true, serviceKey:'blob',
+    tooltip:'BlobStore interface + Registry\nRoutes per-repository to physical store:\n  • Local filesystem (default)\n  • S3-compatible (per-repo config)\nCache: atomic lazy-init, invalidated on update'
+  },
+
+  // ── External (y=465) ──
+  ldap:       { id:'ldap',       label:'LDAP',          layer:'external', x:90,  y:465, color:'amber', w:90,  h:30, toggleable:true, serviceKey:'ldap' },
+  oidc:       { id:'oidc',       label:'OIDC Provider', layer:'external', x:230, y:465, color:'amber', w:110, h:30, toggleable:true, serviceKey:'oidc' },
+  upstream:   { id:'upstream',   label:'Upstream Proxy',layer:'external', x:385, y:465, color:'amber', w:120, h:30, toggleable:true, serviceKey:'upstream' },
+  webhookRcv: { id:'webhookRcv', label:'Webhook Rcvr',  layer:'external', x:535, y:465, color:'amber', w:110, h:30, toggleable:true, serviceKey:'webhookRcv' },
+  trivy:      { id:'trivy',      label:'Trivy Scanner', layer:'external', x:680, y:465, color:'amber', w:110, h:30, toggleable:true, serviceKey:'trivy' },
+  s3store:    { id:'s3store',    label:'S3 Endpoint',   layer:'external', x:845, y:465, color:'amber', w:110, h:30, toggleable:true, serviceKey:'s3store',
+    tooltip:'S3-compatible object storage\n(AWS S3, MinIO, Ceph, etc.)\nUsed when a blob store is configured\nwith type=S3. Health checked via\nGET /api/v1/system/connections'
+  },
+};
+
+const EDGES = [
+  // clients → gin
+  { id:'maven_gin',   from:'maven',   to:'gin' },
+  { id:'npm_gin',     from:'npm',     to:'gin' },
+  { id:'docker_gin',  from:'docker',  to:'gin' },
+  { id:'browser_gin', from:'browser', to:'gin' },
+  { id:'pip_gin',     from:'pip',     to:'gin' },
+  { id:'cargo_gin',   from:'cargo',   to:'gin' },
+  { id:'helm_gin',    from:'helm',    to:'gin' },
+  // gin → services
+  { id:'gin_format',  from:'gin', to:'formatHandlers' },
+  { id:'gin_user',    from:'gin', to:'userService' },
+  { id:'gin_repo',    from:'gin', to:'repoService' },
+  { id:'gin_token',   from:'gin', to:'tokenService' },
+  { id:'gin_backup',  from:'gin', to:'backupService' },
+  { id:'gin_webhook', from:'gin', to:'webhookSvc' },
+  { id:'gin_scan',    from:'gin', to:'scanService' },
+  // services → data
+  { id:'format_blob', from:'formatHandlers', to:'blobStore' },
+  { id:'format_pg',   from:'formatHandlers', to:'postgres' },
+  { id:'user_pg',     from:'userService',    to:'postgres' },
+  { id:'repo_pg',     from:'repoService',    to:'postgres' },
+  { id:'token_pg',    from:'tokenService',   to:'postgres' },
+  { id:'scan_pg',     from:'scanService',    to:'postgres' },
+  { id:'backup_pg',   from:'backupService',  to:'postgres' },
+  { id:'backup_blob', from:'backupService',  to:'blobStore' },
+  // services → external
+  { id:'user_ldap',   from:'userService',    to:'ldap' },
+  { id:'user_oidc',   from:'userService',    to:'oidc' },
+  { id:'format_up',   from:'formatHandlers', to:'upstream' },
+  { id:'webhook_rcv', from:'webhookSvc',     to:'webhookRcv' },
+  { id:'scan_trivy',  from:'scanService',    to:'trivy' },
+  // data → external (S3 backend)
+  { id:'blob_s3',          from:'blobStore', to:'s3store' },
+  // data → clients (download streaming)
+  { id:'blobstore_browser', from:'blobStore', to:'browser' },
+  { id:'gin_oidc',          from:'gin',       to:'oidc' },
+];
+
+const SERVICES = {
+  postgres:   { key:'postgres',   label:'PostgreSQL',    nodeId:'postgres',   up:true },
+  ldap:       { key:'ldap',       label:'LDAP',          nodeId:'ldap',       up:true },
+  oidc:       { key:'oidc',       label:'OIDC Provider', nodeId:'oidc',       up:true },
+  blob:       { key:'blob',       label:'BlobStore',     nodeId:'blobStore',  up:true },
+  upstream:   { key:'upstream',   label:'Upstream Proxy',nodeId:'upstream',   up:true },
+  webhookRcv: { key:'webhookRcv', label:'Webhook Rcvr',  nodeId:'webhookRcv', up:true },
+  trivy:      { key:'trivy',      label:'Trivy Scanner', nodeId:'trivy',      up:true },
+  s3store:    { key:'s3store',    label:'S3 Endpoint',   nodeId:'s3store',    up:true },
+};
+
+const ACTIONS = [
+  // ── Auth ────────────────────────────────────────────────
+  {
+    id:'login_password', label:'Login — Password', icon:'🔐',
+    dependsOn:['postgres'],
+    steps:[
+      { from:'browser',     to:'gin',         label:'POST /api/v1/auth/login',        ms:1,  status:'ok' },
+      { from:'gin',         to:'userService', label:'AuthHandler.Login()',             ms:1,  status:'ok' },
+      { from:'userService', to:'postgres',    label:'UserRepo.GetByUsername()',         ms:2,  status:'ok' },
+      { from:'postgres',    to:'userService', label:'→ user row',                      ms:1,  status:'ok', reverse:true },
+      { from:'userService', to:'gin',         label:'bcrypt.CompareHashAndPassword()', ms:3,  status:'ok', reverse:true },
+      { from:'gin',         to:'browser',     label:'200 { token: "ey..." }',          ms:1,  status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      postgres:[
+        { from:'browser',     to:'gin',         label:'POST /api/v1/auth/login',      ms:1,    status:'ok' },
+        { from:'gin',         to:'userService', label:'AuthHandler.Login()',           ms:1,    status:'ok' },
+        { from:'userService', to:'postgres',    label:'UserRepo.GetByUsername()',       ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',         to:'browser',     label:'503 Service Unavailable',       ms:1,    status:'error', reverse:true },
+      ],
+    }
+  },
+  {
+    id:'login_ldap', label:'Login — LDAP', icon:'🪪',
+    dependsOn:['ldap','postgres'],
+    steps:[
+      { from:'browser',     to:'gin',         label:'POST /api/v1/auth/login',       ms:1,  status:'ok' },
+      { from:'gin',         to:'userService', label:'AuthHandler → loginLDAP()',      ms:1,  status:'ok' },
+      { from:'userService', to:'ldap',        label:'ldap.Authenticate(username)',    ms:12, status:'ok' },
+      { from:'ldap',        to:'userService', label:'→ DN + group memberships',      ms:8,  status:'ok', reverse:true },
+      { from:'userService', to:'postgres',    label:'upsert user + syncLDAPRoles()', ms:4,  status:'ok' },
+      { from:'userService', to:'gin',         label:'auth.GenerateToken()',           ms:1,  status:'ok', reverse:true },
+      { from:'gin',         to:'browser',     label:'200 { token: "ey..." }',         ms:1,  status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      ldap:[
+        { from:'browser',     to:'gin',         label:'POST /api/v1/auth/login',    ms:1,    status:'ok' },
+        { from:'gin',         to:'userService', label:'AuthHandler → loginLDAP()',   ms:1,    status:'ok' },
+        { from:'userService', to:'ldap',        label:'ldap.Bind() — timeout',      ms:5000, status:'error', detail:'i/o timeout after 5s' },
+        { from:'gin',         to:'browser',     label:'401 Unauthorized',            ms:1,    status:'error', reverse:true },
+      ],
+      postgres:[
+        { from:'browser',     to:'gin',         label:'POST /api/v1/auth/login',    ms:1,  status:'ok' },
+        { from:'gin',         to:'userService', label:'AuthHandler → loginLDAP()',   ms:1,  status:'ok' },
+        { from:'userService', to:'ldap',        label:'ldap.Authenticate()',         ms:12, status:'ok' },
+        { from:'ldap',        to:'userService', label:'→ DN + groups',               ms:8,  status:'ok', reverse:true },
+        { from:'userService', to:'postgres',    label:'upsert user — conn refused',  ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',         to:'browser',     label:'503 Service Unavailable',     ms:1,  status:'error', reverse:true },
+      ],
+    }
+  },
+  {
+    id:'login_oidc', label:'Login — OIDC/SSO', icon:'🔑',
+    dependsOn:['oidc','postgres'],
+    steps:[
+      { from:'browser',     to:'gin',      label:'GET /oidc/start',                ms:1,   status:'ok' },
+      { from:'gin',         to:'oidc',     label:'302 → provider authorize URL',   ms:1,   status:'ok' },
+      { from:'oidc',        to:'gin',      label:'GET /oidc/callback?code=…',      ms:200, status:'ok', reverse:true },
+      { from:'gin',         to:'oidc',     label:'exchange code → tokens (PKCE)',  ms:150, status:'ok' },
+      { from:'oidc',        to:'gin',      label:'→ access_token + id_token',      ms:80,  status:'ok', reverse:true },
+      { from:'gin',         to:'postgres', label:'upsert user + syncOIDCRoles()',  ms:4,   status:'ok' },
+      { from:'gin',         to:'browser',  label:'302 /oidc/done#token=ey…',       ms:1,   status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      oidc:[
+        { from:'browser', to:'gin',     label:'GET /oidc/start',              ms:1,    status:'ok' },
+        { from:'gin',     to:'oidc',    label:'connect to provider — timeout', ms:5000, status:'error', detail:'context deadline exceeded' },
+        { from:'gin',     to:'browser', label:'502 Bad Gateway',              ms:1,    status:'error', reverse:true },
+      ],
+      postgres:[
+        { from:'browser', to:'gin',      label:'GET /oidc/start',             ms:1,   status:'ok' },
+        { from:'gin',     to:'oidc',     label:'redirect → provider',         ms:1,   status:'ok' },
+        { from:'oidc',    to:'gin',      label:'callback code',               ms:200, status:'ok', reverse:true },
+        { from:'gin',     to:'oidc',     label:'exchange code → tokens',      ms:150, status:'ok' },
+        { from:'oidc',    to:'gin',      label:'→ tokens',                    ms:80,  status:'ok', reverse:true },
+        { from:'gin',     to:'postgres', label:'upsert user — conn refused',  ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',     to:'browser',  label:'503 Service Unavailable',     ms:1,   status:'error', reverse:true },
+      ],
+    }
+  },
+  // ── Artifacts ────────────────────────────────────────────
+  {
+    id:'upload', label:'Artifact Upload', icon:'📦',
+    dependsOn:['postgres','blob'],
+    steps:[
+      { from:'browser',        to:'gin',            label:'PUT /repository/maven-releases/…',   ms:1,  status:'ok' },
+      { from:'gin',            to:'formatHandlers', label:'MavenHandler.StoreArtifact()',        ms:1,  status:'ok' },
+      { from:'formatHandlers', to:'blobStore',      label:'Registry.Resolve(repoID) → Put(key)', ms:25, status:'ok' },
+      { from:'formatHandlers', to:'postgres',       label:'ComponentRepo.Upsert()',              ms:5,  status:'ok' },
+      { from:'postgres',       to:'formatHandlers', label:'→ component ID',                     ms:2,  status:'ok', reverse:true },
+      { from:'gin',            to:'browser',        label:'201 Created',                        ms:1,  status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      blob:[
+        { from:'browser',        to:'gin',            label:'PUT /repository/maven-releases/…', ms:1,    status:'ok' },
+        { from:'gin',            to:'formatHandlers', label:'MavenHandler.StoreArtifact()',     ms:1,    status:'ok' },
+        { from:'formatHandlers', to:'blobStore',      label:'BlobStore.Put() — disk full',      ms:3000, status:'error', detail:'no space left on device' },
+        { from:'gin',            to:'browser',        label:'507 Insufficient Storage',         ms:1,    status:'error', reverse:true },
+      ],
+      postgres:[
+        { from:'browser',        to:'gin',            label:'PUT /repository/maven-releases/…', ms:1,  status:'ok' },
+        { from:'gin',            to:'formatHandlers', label:'MavenHandler.StoreArtifact()',     ms:1,  status:'ok' },
+        { from:'formatHandlers', to:'blobStore',      label:'BlobStore.Put() — ok',             ms:25, status:'ok' },
+        { from:'formatHandlers', to:'postgres',       label:'ComponentRepo.Upsert() — error',  ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',            to:'browser',        label:'503 Service Unavailable',          ms:1,  status:'error', reverse:true },
+      ],
+    }
+  },
+  {
+    id:'download', label:'Artifact Download', icon:'⬇️',
+    dependsOn:['postgres','blob'],
+    steps:[
+      { from:'browser',        to:'gin',            label:'GET /repository/maven-releases/…', ms:1,  status:'ok' },
+      { from:'gin',            to:'formatHandlers', label:'MavenHandler.FetchArtifact()',     ms:1,  status:'ok' },
+      { from:'formatHandlers', to:'postgres',       label:'AssetRepo.GetByPath()',            ms:2,  status:'ok' },
+      { from:'postgres',       to:'formatHandlers', label:'→ blob_key (sha256)',              ms:1,  status:'ok', reverse:true },
+      { from:'formatHandlers', to:'blobStore',      label:'Registry.Resolve(repoID) → Get(key)', ms:15, status:'ok' },
+      { from:'blobStore',      to:'browser',        label:'200 binary stream',               ms:1,  status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      blob:[
+        { from:'browser',        to:'gin',            label:'GET /repository/maven-releases/…', ms:1,   status:'ok' },
+        { from:'gin',            to:'formatHandlers', label:'MavenHandler.FetchArtifact()',     ms:1,   status:'ok' },
+        { from:'formatHandlers', to:'postgres',       label:'AssetRepo.GetByPath()',            ms:2,   status:'ok' },
+        { from:'postgres',       to:'formatHandlers', label:'→ blob_key',                      ms:1,   status:'ok', reverse:true },
+        { from:'formatHandlers', to:'blobStore',      label:'BlobStore.Get() — file missing',  ms:100, status:'error', detail:'blob key not found on disk' },
+        { from:'gin',            to:'browser',        label:'404 Not Found',                   ms:1,   status:'error', reverse:true },
+      ],
+      postgres:[
+        { from:'browser',        to:'gin',            label:'GET /repository/maven-releases/…', ms:1,    status:'ok' },
+        { from:'gin',            to:'formatHandlers', label:'MavenHandler.FetchArtifact()',     ms:1,    status:'ok' },
+        { from:'formatHandlers', to:'postgres',       label:'AssetRepo.GetByPath() — error',   ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',            to:'browser',        label:'503 Service Unavailable',          ms:1,    status:'error', reverse:true },
+      ],
+    }
+  },
+  {
+    id:'proxy_miss', label:'Proxy Cache Miss', icon:'🔄',
+    dependsOn:['upstream','blob','postgres'],
+    steps:[
+      { from:'browser',        to:'gin',            label:'GET /repository/proxy-central/…',  ms:1,   status:'ok' },
+      { from:'gin',            to:'formatHandlers', label:'MavenHandler.FetchArtifact()',      ms:1,   status:'ok' },
+      { from:'formatHandlers', to:'postgres',       label:'AssetRepo.GetByPath() — miss',      ms:2,   status:'ok' },
+      { from:'formatHandlers', to:'upstream',       label:'http.Get(upstream URL)',            ms:800, status:'ok' },
+      { from:'upstream',       to:'formatHandlers', label:'→ artifact stream',                ms:300, status:'ok', reverse:true },
+      { from:'formatHandlers', to:'blobStore',      label:'BlobStore.Put() — cache write',    ms:20,  status:'ok' },
+      { from:'formatHandlers', to:'postgres',       label:'AssetRepo.Create() — cache record',ms:5,   status:'ok' },
+      { from:'blobStore',      to:'browser',        label:'200 stream',                       ms:1,   status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      upstream:[
+        { from:'browser',        to:'gin',            label:'GET /repository/proxy-central/…',   ms:1,    status:'ok' },
+        { from:'gin',            to:'formatHandlers', label:'MavenHandler.FetchArtifact()',       ms:1,    status:'ok' },
+        { from:'formatHandlers', to:'postgres',       label:'AssetRepo.GetByPath() — miss',       ms:2,    status:'ok' },
+        { from:'formatHandlers', to:'upstream',       label:'http.Get(upstream) — unreachable',  ms:5000, status:'error', detail:'dial tcp: connection refused' },
+        { from:'gin',            to:'browser',        label:'502 Bad Gateway',                   ms:1,    status:'error', reverse:true },
+      ],
+      blob:[
+        { from:'browser',        to:'gin',            label:'GET /repository/proxy-central/…', ms:1,   status:'ok' },
+        { from:'gin',            to:'formatHandlers', label:'MavenHandler.FetchArtifact()',    ms:1,   status:'ok' },
+        { from:'formatHandlers', to:'postgres',       label:'cache miss',                      ms:2,   status:'ok' },
+        { from:'formatHandlers', to:'upstream',       label:'upstream fetch — ok',             ms:800, status:'ok' },
+        { from:'upstream',       to:'formatHandlers', label:'→ stream',                        ms:300, status:'ok', reverse:true },
+        { from:'formatHandlers', to:'blobStore',      label:'BlobStore.Put() — disk full',     ms:3000, status:'error', detail:'no space left on device' },
+        { from:'gin',            to:'browser',        label:'507 Insufficient Storage',        ms:1,   status:'error', reverse:true },
+      ],
+    }
+  },
+  {
+    id:'docker_pull', label:'Docker Pull', icon:'🐳',
+    dependsOn:['postgres','blob'],
+    steps:[
+      { from:'browser',        to:'gin',            label:'GET /v2/ (auth check)',               ms:1,  status:'warn' },
+      { from:'gin',            to:'browser',        label:'401 WWW-Authenticate: Basic realm=…', ms:1,  status:'warn', reverse:true },
+      { from:'browser',        to:'gin',            label:'GET /v2/ + Authorization: Bearer…',   ms:1,  status:'ok' },
+      { from:'gin',            to:'formatHandlers', label:'DockerHandler — manifest lookup',      ms:1,  status:'ok' },
+      { from:'formatHandlers', to:'postgres',       label:'AssetRepo.GetByDigest()',              ms:2,  status:'ok' },
+      { from:'postgres',       to:'formatHandlers', label:'→ manifest JSON',                     ms:1,  status:'ok', reverse:true },
+      { from:'formatHandlers', to:'blobStore',      label:'BlobStore.Get(layer sha256)',          ms:30, status:'ok' },
+      { from:'blobStore',      to:'browser',        label:'200 layer stream',                    ms:1,  status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      blob:[
+        { from:'browser',        to:'gin',            label:'GET /v2/ + Authorization',         ms:1,    status:'ok' },
+        { from:'gin',            to:'formatHandlers', label:'DockerHandler — manifest lookup',   ms:1,    status:'ok' },
+        { from:'formatHandlers', to:'postgres',       label:'AssetRepo.GetByDigest()',           ms:2,    status:'ok' },
+        { from:'postgres',       to:'formatHandlers', label:'→ manifest',                       ms:1,    status:'ok', reverse:true },
+        { from:'formatHandlers', to:'blobStore',      label:'BlobStore.Get(layer) — missing',   ms:1000, status:'error', detail:'blob key not found' },
+        { from:'gin',            to:'browser',        label:'500 Internal Server Error',         ms:1,    status:'error', reverse:true },
+      ],
+      postgres:[
+        { from:'browser',        to:'gin',            label:'GET /v2/ + Authorization',         ms:1,    status:'ok' },
+        { from:'gin',            to:'formatHandlers', label:'DockerHandler',                    ms:1,    status:'ok' },
+        { from:'formatHandlers', to:'postgres',       label:'AssetRepo.GetByDigest() — error',  ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',            to:'browser',        label:'500 Internal Server Error',         ms:1,    status:'error', reverse:true },
+      ],
+    }
+  },
+  // ── Auth tokens ──────────────────────────────────────────
+  {
+    id:'api_token', label:'API Token', icon:'🔒',
+    dependsOn:['postgres'],
+    steps:[
+      { from:'browser',      to:'gin',          label:'POST /api/v1/auth/tokens',         ms:1,  status:'ok' },
+      { from:'gin',          to:'tokenService', label:'TokenService.Create(userID)',       ms:1,  status:'ok' },
+      { from:'tokenService', to:'postgres',     label:'UserTokenRepo.Create(sha256hash)', ms:2,  status:'ok' },
+      { from:'tokenService', to:'gin',          label:'→ plaintext nxs_randomhex',        ms:1,  status:'ok', reverse:true },
+      { from:'gin',          to:'browser',      label:'201 { token: "nxs_abc..." }',      ms:1,  status:'ok', reverse:true },
+      { from:'browser',      to:'gin',          label:'GET /api/… Authorization: Bearer nxs_…', ms:1, status:'ok' },
+      { from:'gin',          to:'tokenService', label:'TokenService.Validate(sha256(token))',    ms:1, status:'ok' },
+      { from:'tokenService', to:'postgres',     label:'UserTokenRepo.GetByHash()',              ms:2, status:'ok' },
+      { from:'gin',          to:'browser',      label:'200 (authenticated response)',           ms:1, status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      postgres:[
+        { from:'browser',      to:'gin',          label:'POST /api/v1/auth/tokens',       ms:1,    status:'ok' },
+        { from:'gin',          to:'tokenService', label:'TokenService.Create()',           ms:1,    status:'ok' },
+        { from:'tokenService', to:'postgres',     label:'UserTokenRepo.Create() — error', ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',          to:'browser',      label:'503 Service Unavailable',        ms:1,    status:'error', reverse:true },
+      ],
+    }
+  },
+  // ── Webhooks / events ────────────────────────────────────
+  {
+    id:'webhook', label:'Webhook Delivery', icon:'⚡',
+    dependsOn:['webhookRcv','postgres','blob'],
+    steps:[
+      { from:'browser',        to:'gin',            label:'PUT /repository/maven-releases/…', ms:1,   status:'ok' },
+      { from:'gin',            to:'formatHandlers', label:'MavenHandler.StoreArtifact()',     ms:1,   status:'ok' },
+      { from:'formatHandlers', to:'blobStore',      label:'BlobStore.Put()',                  ms:20,  status:'ok' },
+      { from:'formatHandlers', to:'postgres',       label:'ComponentRepo.Upsert()',           ms:5,   status:'ok' },
+      { from:'gin',            to:'browser',        label:'201 Created',                     ms:1,   status:'ok', reverse:true },
+      { from:'webhookSvc',     to:'webhookRcv',     label:'POST artifact.published (async)', ms:150, status:'ok' },
+      { from:'webhookRcv',     to:'webhookSvc',     label:'200 OK',                          ms:50,  status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      webhookRcv:[
+        { from:'browser',        to:'gin',            label:'PUT /repository/maven-releases/…', ms:1,   status:'ok' },
+        { from:'gin',            to:'formatHandlers', label:'MavenHandler.StoreArtifact()',     ms:1,   status:'ok' },
+        { from:'formatHandlers', to:'blobStore',      label:'BlobStore.Put()',                  ms:20,  status:'ok' },
+        { from:'formatHandlers', to:'postgres',       label:'ComponentRepo.Upsert()',           ms:5,   status:'ok' },
+        { from:'gin',            to:'browser',        label:'201 Created (artifact stored OK)', ms:1,   status:'ok', reverse:true },
+        { from:'webhookSvc',     to:'webhookRcv',     label:'POST artifact.published — refused',ms:3000, status:'error', detail:'connect: connection refused' },
+      ],
+    }
+  },
+  // ── Cleanup ──────────────────────────────────────────────
+  {
+    id:'cleanup', label:'Cleanup Policy Run', icon:'🧹',
+    dependsOn:['postgres','blob'],
+    steps:[
+      { from:'browser',     to:'gin',         label:'POST /service/rest/v1/cleanup-policies/:id/run', ms:1,   status:'ok' },
+      { from:'gin',         to:'repoService', label:'CleanupService.Run(policyID)',                   ms:1,   status:'ok' },
+      { from:'repoService', to:'postgres',    label:'AssetRepo.ListStale(criteria, retainNVersions)', ms:10,  status:'ok' },
+      { from:'postgres',    to:'repoService', label:'→ 47 expired asset rows',                       ms:5,   status:'ok', reverse:true },
+      { from:'repoService', to:'blobStore',   label:'BlobStore.Delete(keys) × 47',                   ms:200, status:'ok' },
+      { from:'repoService', to:'postgres',    label:'AssetRepo.DeleteBatch(IDs)',                    ms:15,  status:'ok' },
+      { from:'gin',         to:'browser',     label:'200 { deleted: 47, freed_bytes: … }',           ms:1,   status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      postgres:[
+        { from:'browser',     to:'gin',         label:'POST /cleanup-policies/:id/run', ms:1,    status:'ok' },
+        { from:'gin',         to:'repoService', label:'CleanupService.Run()',           ms:1,    status:'ok' },
+        { from:'repoService', to:'postgres',    label:'AssetRepo.ListStale() — error', ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',         to:'browser',     label:'503 Service Unavailable',        ms:1,    status:'error', reverse:true },
+      ],
+      blob:[
+        { from:'browser',     to:'gin',         label:'POST /cleanup-policies/:id/run',ms:1,   status:'ok' },
+        { from:'gin',         to:'repoService', label:'CleanupService.Run()',          ms:1,   status:'ok' },
+        { from:'repoService', to:'postgres',    label:'AssetRepo.ListStale()',         ms:10,  status:'ok' },
+        { from:'postgres',    to:'repoService', label:'→ 47 expired assets',           ms:5,   status:'ok', reverse:true },
+        { from:'repoService', to:'blobStore',   label:'BlobStore.Delete() — error',   ms:200, status:'error', detail:'storage backend unreachable' },
+        { from:'gin',         to:'browser',     label:'500 partial cleanup failed',    ms:1,   status:'error', reverse:true },
+      ],
+    }
+  },
+  {
+    id:'cleanup_dryrun', label:'Cleanup Dry Run', icon:'🔍',
+    dependsOn:['postgres'],
+    steps:[
+      { from:'browser',     to:'gin',         label:'POST /service/rest/v1/cleanup-policies/:id/run?dry_run=true', ms:1,  status:'ok' },
+      { from:'gin',         to:'repoService', label:'CleanupService.DryRun(policyID, scope)',                       ms:1,  status:'ok' },
+      { from:'repoService', to:'postgres',    label:'AssetRepo.ListStale(criteria, retainNVersions)',               ms:12, status:'ok' },
+      { from:'postgres',    to:'repoService', label:'→ 23 candidate assets (not deleted)',                         ms:5,  status:'ok', reverse:true },
+      { from:'gin',         to:'browser',     label:'200 { would_delete: 23, would_free_bytes: 418MB }',           ms:1,  status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      postgres:[
+        { from:'browser',     to:'gin',         label:'POST /cleanup-policies/:id/run?dry_run=true', ms:1,    status:'ok' },
+        { from:'gin',         to:'repoService', label:'CleanupService.DryRun()',                      ms:1,    status:'ok' },
+        { from:'repoService', to:'postgres',    label:'AssetRepo.ListStale() — error',               ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',         to:'browser',     label:'503 Service Unavailable',                      ms:1,    status:'error', reverse:true },
+      ],
+    }
+  },
+  // ── Search ───────────────────────────────────────────────
+  {
+    id:'search', label:'Component Search', icon:'🔎',
+    dependsOn:['postgres'],
+    steps:[
+      { from:'browser',     to:'gin',         label:'GET /service/rest/v1/search?q=spring', ms:1, status:'ok' },
+      { from:'gin',         to:'repoService', label:'SearchHandler.Search()',               ms:1, status:'ok' },
+      { from:'repoService', to:'postgres',    label:'ComponentRepo.Search() — tsvector',   ms:8, status:'ok' },
+      { from:'postgres',    to:'repoService', label:'→ 12 components',                    ms:4, status:'ok', reverse:true },
+      { from:'gin',         to:'browser',     label:'200 { items: [...] }',               ms:1, status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      postgres:[
+        { from:'browser',     to:'gin',         label:'GET /service/rest/v1/search?q=spring', ms:1,    status:'ok' },
+        { from:'gin',         to:'repoService', label:'SearchHandler.Search()',               ms:1,    status:'ok' },
+        { from:'repoService', to:'postgres',    label:'ComponentRepo.Search() — error',       ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',         to:'browser',     label:'503 Service Unavailable',              ms:1,    status:'error', reverse:true },
+      ],
+    }
+  },
+  // ── Security ─────────────────────────────────────────────
+  {
+    id:'scan', label:'Vulnerability Scan', icon:'🛡️',
+    dependsOn:['trivy','postgres'],
+    steps:[
+      { from:'browser',     to:'gin',         label:'POST /api/v1/components/:id/scan',         ms:1,    status:'ok' },
+      { from:'gin',         to:'scanService', label:'ScanService.Scan(imageRef)',                ms:1,    status:'ok' },
+      { from:'scanService', to:'trivy',       label:'trivy image --format json myimage:latest', ms:2000, status:'ok' },
+      { from:'trivy',       to:'scanService', label:'→ CVE list (critical:2, high:5)',           ms:500,  status:'ok', reverse:true },
+      { from:'scanService', to:'postgres',    label:'ComponentRepo.UpdateExtra(scan_result)',   ms:5,    status:'ok' },
+      { from:'gin',         to:'browser',     label:'200 { critical:2, high:5, medium:12 }',    ms:1,    status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      trivy:[
+        { from:'browser',     to:'gin',         label:'POST /api/v1/components/:id/scan', ms:1,    status:'ok' },
+        { from:'gin',         to:'scanService', label:'ScanService.Scan(imageRef)',        ms:1,    status:'ok' },
+        { from:'scanService', to:'trivy',       label:'trivy — not reachable',            ms:5000, status:'error', detail:'exec: trivy: executable file not found' },
+        { from:'gin',         to:'browser',     label:'503 Scanner unavailable',          ms:1,    status:'error', reverse:true },
+      ],
+      postgres:[
+        { from:'browser',     to:'gin',         label:'POST /api/v1/components/:id/scan',    ms:1,    status:'ok' },
+        { from:'gin',         to:'scanService', label:'ScanService.Scan()',                  ms:1,    status:'ok' },
+        { from:'scanService', to:'trivy',       label:'trivy image ref',                     ms:2000, status:'ok' },
+        { from:'trivy',       to:'scanService', label:'→ CVE list',                          ms:500,  status:'ok', reverse:true },
+        { from:'scanService', to:'postgres',    label:'ComponentRepo.UpdateExtra() — error', ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',         to:'browser',     label:'503 Service Unavailable',             ms:1,    status:'error', reverse:true },
+      ],
+    }
+  },
+  // ── Backup / Export-Import (Phase 45) ────────────────────
+  {
+    id:'export_repo', label:'Export Repository', icon:'📤',
+    dependsOn:['postgres','blob'],
+    steps:[
+      { from:'browser',       to:'gin',           label:'GET /api/v1/repositories/my-repo/export',        ms:1,   status:'ok' },
+      { from:'gin',           to:'backupService', label:'BackupHandler.ExportRepo()',                      ms:1,   status:'ok' },
+      { from:'backupService', to:'postgres',      label:'ComponentRepo.List() — enumerate assets',         ms:10,  status:'ok' },
+      { from:'postgres',      to:'backupService', label:'→ N components + asset rows',                    ms:5,   status:'ok', reverse:true },
+      { from:'backupService', to:'blobStore',     label:'BlobStore.Get(key) × N — stream blobs into tar', ms:200, status:'ok' },
+      { from:'gin',           to:'browser',       label:'200 streaming tar.gz (Content-Disposition: attachment)', ms:1, status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      postgres:[
+        { from:'browser',       to:'gin',           label:'GET /api/v1/repositories/my-repo/export', ms:1,    status:'ok' },
+        { from:'gin',           to:'backupService', label:'BackupHandler.ExportRepo()',               ms:1,    status:'ok' },
+        { from:'backupService', to:'postgres',      label:'ComponentRepo.List() — error',            ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',           to:'browser',       label:'503 Service Unavailable',                  ms:1,    status:'error', reverse:true },
+      ],
+      blob:[
+        { from:'browser',       to:'gin',           label:'GET /api/v1/repositories/my-repo/export', ms:1,  status:'ok' },
+        { from:'gin',           to:'backupService', label:'BackupHandler.ExportRepo()',               ms:1,  status:'ok' },
+        { from:'backupService', to:'postgres',      label:'ComponentRepo.List()',                     ms:10, status:'ok' },
+        { from:'postgres',      to:'backupService', label:'→ asset rows',                            ms:5,  status:'ok', reverse:true },
+        { from:'backupService', to:'blobStore',     label:'BlobStore.Get() — file missing',          ms:100, status:'error', detail:'blob key not found on disk' },
+        { from:'gin',           to:'browser',       label:'500 Internal Server Error',               ms:1,  status:'error', reverse:true },
+      ],
+    }
+  },
+  {
+    id:'import_repo', label:'Import Repository', icon:'📥',
+    dependsOn:['postgres','blob'],
+    steps:[
+      { from:'browser',       to:'gin',           label:'POST /api/v1/repositories/import (multipart tar.gz)', ms:1,   status:'ok' },
+      { from:'gin',           to:'backupService', label:'BackupHandler.ImportRepo(conflictMode=skip)',          ms:1,   status:'ok' },
+      { from:'backupService', to:'postgres',      label:'ComponentRepo.Upsert() — dedup by sha256',           ms:20,  status:'ok' },
+      { from:'backupService', to:'blobStore',     label:'BlobStore.Put(key) × N — write blobs',               ms:300, status:'ok' },
+      { from:'gin',           to:'browser',       label:'200 { imported: 38, skipped: 4, bytes: 210MB }',     ms:1,   status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      postgres:[
+        { from:'browser',       to:'gin',           label:'POST /api/v1/repositories/import', ms:1,    status:'ok' },
+        { from:'gin',           to:'backupService', label:'BackupHandler.ImportRepo()',        ms:1,    status:'ok' },
+        { from:'backupService', to:'postgres',      label:'ComponentRepo.Upsert() — error',  ms:3000, status:'error', detail:'connection refused' },
+        { from:'gin',           to:'browser',       label:'503 Service Unavailable',           ms:1,    status:'error', reverse:true },
+      ],
+      blob:[
+        { from:'browser',       to:'gin',           label:'POST /api/v1/repositories/import', ms:1,  status:'ok' },
+        { from:'gin',           to:'backupService', label:'BackupHandler.ImportRepo()',        ms:1,  status:'ok' },
+        { from:'backupService', to:'postgres',      label:'ComponentRepo.Upsert()',           ms:20, status:'ok' },
+        { from:'backupService', to:'blobStore',     label:'BlobStore.Put() — disk full',     ms:3000, status:'error', detail:'no space left on device' },
+        { from:'gin',           to:'browser',       label:'507 Insufficient Storage',         ms:1,  status:'error', reverse:true },
+      ],
+    }
+  },
+  // ── S3 Blob Store (Phase 46) ─────────────────────────────
+  {
+    id:'test_blobstore', label:'Test Blob Store', icon:'🔌',
+    dependsOn:['s3store'],
+    steps:[
+      { from:'browser',   to:'gin',       label:'POST /api/v1/blobstores/test',            ms:1,  status:'ok' },
+      { from:'gin',       to:'blobStore', label:'BlobStoreService.TestConnect(config)',     ms:1,  status:'ok' },
+      { from:'blobStore', to:'s3store',   label:'S3 PutObject probe (s3://bucket/.probe)', ms:80, status:'ok' },
+      { from:'s3store',   to:'blobStore', label:'→ 200 OK',                                ms:30, status:'ok', reverse:true },
+      { from:'gin',       to:'browser',   label:'200 { ok: true, latency_ms: 110 }',       ms:1,  status:'ok', reverse:true },
+    ],
+    failureSteps:{
+      s3store:[
+        { from:'browser',   to:'gin',       label:'POST /api/v1/blobstores/test',          ms:1,    status:'ok' },
+        { from:'gin',       to:'blobStore', label:'BlobStoreService.TestConnect()',         ms:1,    status:'ok' },
+        { from:'blobStore', to:'s3store',   label:'S3 probe — connection refused',         ms:5000, status:'error', detail:'dial tcp: connection refused' },
+        { from:'gin',       to:'browser',   label:'200 { ok: false, error: "dial tcp: connection refused" }', ms:1, status:'error', reverse:true },
+      ],
+    }
+  },
+];
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+const state = {
+  selectedAction: null,
+  running: false,
+  services: {},
+};
+
+// ═══════════════════════════════════════════════════════
+//  LEFT PANEL
+// ═══════════════════════════════════════════════════════
+function renderLeftPanel() {
+  Object.values(SERVICES).forEach(s => { state.services[s.key] = true; });
+
+  const scroll = document.getElementById('left-scroll');
+  scroll.innerHTML = '';
+
+  const actSection = document.createElement('div');
+  actSection.className = 'panel-section';
+  actSection.innerHTML = '<div class="panel-section-title">Actions</div>';
+  scroll.appendChild(actSection);
+
+  ACTIONS.forEach(action => {
+    const el = document.createElement('div');
+    el.className = 'action-item';
+    el.id = 'action-' + action.id;
+    el.innerHTML = `<span class="action-icon">${action.icon}</span><span class="action-label">${action.label}</span>`;
+    el.addEventListener('click', () => handleActionClick(action));
+    scroll.appendChild(el);
+  });
+
+  const divider = document.createElement('div');
+  divider.className = 'divider';
+  divider.style.margin = '8px 0';
+  scroll.appendChild(divider);
+
+  const svcSection = document.createElement('div');
+  svcSection.className = 'panel-section';
+  svcSection.innerHTML = '<div class="panel-section-title">Services</div>';
+  scroll.appendChild(svcSection);
+
+  Object.values(SERVICES).forEach(svc => {
+    const el = document.createElement('div');
+    el.className = 'svc-toggle';
+    el.id = 'svc-' + svc.key;
+    el.innerHTML = `
+      <div class="svc-dot up" id="svc-dot-${svc.key}"></div>
+      <span class="svc-label">${svc.label}</span>
+      <span class="svc-status up" id="svc-status-${svc.key}">UP</span>
+    `;
+    el.addEventListener('click', () => toggleService(svc.key));
+    scroll.appendChild(el);
+  });
+}
+
+function handleActionClick(action) {
+  if (state.running) return;
+  document.querySelectorAll('.action-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('action-' + action.id);
+  if (el) el.classList.add('active');
+  state.selectedAction = action.id;
+  document.getElementById('trace-action-name').textContent = action.icon + ' ' + action.label;
+
+  const stepsToUse = getStepsForAction(action);
+  if (!stepsToUse || stepsToUse.length === 0) {
+    const body = document.getElementById('trace-body');
+    body.innerHTML = '<div class="trace-empty">No steps defined for this action yet.</div>';
+    return;
+  }
+  playAction(action);
+}
+
+function toggleService(key) {
+  state.services[key] = !state.services[key];
+  const svc = SERVICES[key];
+  const up = state.services[key];
+
+  const dot    = document.getElementById('svc-dot-' + key);
+  const status = document.getElementById('svc-status-' + key);
+  dot.className    = 'svc-dot ' + (up ? 'up' : 'down');
+  status.className = 'svc-status ' + (up ? 'up' : 'down');
+  status.textContent = up ? 'UP' : 'DOWN';
+
+  setNodeState(svc.nodeId, up ? 'normal' : 'down');
+}
+
+function getStepsForAction(action) {
+  for (const svcKey of (action.dependsOn || [])) {
+    if (!state.services[svcKey] && action.failureSteps && action.failureSteps[svcKey]) {
+      return action.failureSteps[svcKey];
+    }
+  }
+  return action.steps;
+}
+
+// ═══════════════════════════════════════════════════════
+//  GRAPH
+// ═══════════════════════════════════════════════════════
+function renderGraph() {
+  const svg = document.getElementById('graph-svg');
+
+  [
+    { label:'CLIENTS',    y:16 },
+    { label:'HTTP / GIN', y:116 },
+    { label:'SERVICES',   y:218 },
+    { label:'DATA',       y:330 },
+    { label:'EXTERNAL',   y:440 },
+  ].forEach(l => {
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x','8');
+    t.setAttribute('y', l.y);
+    t.setAttribute('class','layer-label');
+    t.textContent = l.label;
+    svg.appendChild(t);
+  });
+
+  EDGES.forEach(e => {
+    const fn = NODES[e.from], tn = NODES[e.to];
+    if (!fn || !tn) return;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', fn.x);
+    line.setAttribute('y1', fn.y + fn.h / 2);
+    line.setAttribute('x2', tn.x);
+    line.setAttribute('y2', tn.y - tn.h / 2);
+    line.setAttribute('class','svg-edge');
+    line.id = 'edge-' + e.id;
+    svg.appendChild(line);
+  });
+
+  Object.values(NODES).forEach(n => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class', `svg-node color-${n.color} state-normal`);
+    g.id = 'node-' + n.id;
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', n.x - n.w / 2);
+    rect.setAttribute('y', n.y - n.h / 2);
+    rect.setAttribute('width', n.w);
+    rect.setAttribute('height', n.h);
+    rect.setAttribute('rx', '7');
+
+    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x', n.x);
+    text.setAttribute('y', n.y);
+    text.textContent = n.label;
+
+    g.appendChild(rect);
+    g.appendChild(text);
+
+    if (n.tooltip) {
+      g.style.cursor = 'help';
+      g.addEventListener('mouseenter', ev => showTooltip(n, ev));
+      g.addEventListener('mouseleave', hideTooltip);
+    }
+
+    svg.appendChild(g);
+  });
+}
+
+function showTooltip(node, ev) {
+  const tip = document.getElementById('node-tooltip');
+  document.getElementById('tooltip-title').textContent = node.label;
+  document.getElementById('tooltip-body').innerHTML = node.tooltip.replace(/\n/g, '<br>');
+  const panel = document.getElementById('center-panel');
+  const pr = panel.getBoundingClientRect();
+  tip.style.left = (ev.clientX - pr.left + 12) + 'px';
+  tip.style.top  = (ev.clientY - pr.top  + 12) + 'px';
+  tip.classList.add('visible');
+}
+
+function hideTooltip() {
+  document.getElementById('node-tooltip').classList.remove('visible');
+}
+
+function setNodeState(nodeId, st) {
+  const g = document.getElementById('node-' + nodeId);
+  if (!g) return;
+  const classes = g.getAttribute('class').replace(/state-\w+/, '').trim();
+  g.setAttribute('class', classes + ' state-' + st);
+}
+
+// ═══════════════════════════════════════════════════════
+//  ANIMATION ENGINE
+// ═══════════════════════════════════════════════════════
+
+let _animTimer = null;
+
+function resetAllNodes() {
+  Object.values(NODES).forEach(n => {
+    const down = n.serviceKey && !state.services[n.serviceKey];
+    setNodeState(n.id, down ? 'down' : 'normal');
+  });
+  document.querySelectorAll('.svg-edge').forEach(el => {
+    el.setAttribute('class', 'svg-edge');
+  });
+}
+
+function getEdgeId(fromId, toId) {
+  const direct = EDGES.find(e => e.from === fromId && e.to === toId);
+  if (direct) return direct.id;
+  const rev = EDGES.find(e => e.from === toId && e.to === fromId);
+  return rev ? rev.id : null;
+}
+
+function animateDot(step) {
+  const svg = document.getElementById('graph-svg');
+  const from = NODES[step.from];
+  const to   = NODES[step.to];
+  if (!from || !to) return;
+
+  const isError = step.status === 'error';
+  const isWarn  = step.status === 'warn';
+  const color   = isError ? '#ef4444' : isWarn ? '#f59e0b' : (step.reverse ? '#22c55e' : '#3b82f6');
+  const radius  = step.reverse ? 4 : 5;
+
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('r', radius);
+  circle.setAttribute('fill', color);
+  circle.setAttribute('opacity', '0.95');
+  svg.appendChild(circle);
+
+  const durMs = Math.min(Math.max(50, (step.ms || 0) / 8), 900);
+
+  circle.animate(
+    [
+      { transform: `translate(${from.x}px,${from.y}px)` },
+      { transform: `translate(${to.x}px,${to.y}px)` },
+    ],
+    { duration: durMs, easing: 'cubic-bezier(0.4,0,0.2,1)', fill: 'forwards' }
+  ).onfinish = () => setTimeout(() => circle.remove(), 80);
+
+  const edgeId = getEdgeId(step.from, step.to);
+  if (edgeId) {
+    const edgeEl = document.getElementById('edge-' + edgeId);
+    if (edgeEl) edgeEl.setAttribute('class', 'svg-edge ' + (isError ? 'error' : 'active'));
+  }
+}
+
+function clearTrace() {
+  document.getElementById('trace-body').innerHTML = '';
+  document.getElementById('replay-btn').style.display = 'none';
+}
+
+function appendTraceRow(step, elapsed) {
+  const body = document.getElementById('trace-body');
+  const row = document.createElement('div');
+  row.className = 'trace-row';
+
+  const isError = step.status === 'error';
+  const isWarn  = step.status === 'warn';
+  const dotClass = isError ? 'error' : isWarn ? 'warn' : (step.reverse ? 'ok' : 'info');
+  const timeStr  = elapsed >= 1000 ? (elapsed / 1000).toFixed(1) + 's' : elapsed + 'ms';
+
+  row.innerHTML = `
+    <div class="trace-dot ${dotClass}"></div>
+    <div class="trace-content">
+      <div class="trace-label">${step.label || (step.from + ' → ' + step.to)}</div>
+      ${step.detail ? `<div class="trace-detail">${step.detail}</div>` : ''}
+    </div>
+    <div class="trace-time">+${timeStr}</div>
+  `;
+  body.appendChild(row);
+  body.scrollTop = body.scrollHeight;
+}
+
+function appendTraceStatus(isError) {
+  const body = document.getElementById('trace-body');
+  const badge = document.createElement('div');
+  badge.className = 'trace-status-badge ' + (isError ? 'error' : 'ok');
+  badge.textContent = isError ? '✕ Failed' : '✓ Success';
+  body.appendChild(badge);
+  body.scrollTop = body.scrollHeight;
+  document.getElementById('replay-btn').style.display = 'block';
+}
+
+function playAction(action) {
+  if (_animTimer) { clearTimeout(_animTimer); _animTimer = null; }
+  clearTrace();
+  resetAllNodes();
+  state.running = true;
+
+  document.querySelectorAll('.action-item').forEach(el => el.classList.remove('running'));
+  const actionEl = document.getElementById('action-' + action.id);
+  if (actionEl) { actionEl.classList.remove('active'); actionEl.classList.add('running'); }
+
+  const steps = getStepsForAction(action);
+  if (!steps || steps.length === 0) {
+    state.running = false;
+    document.getElementById('trace-body').innerHTML = '<div class="trace-empty">No steps defined for this action yet.</div>';
+    if (actionEl) { actionEl.classList.remove('running'); actionEl.classList.add('active'); }
+    return;
+  }
+
+  let elapsed = 0;
+  let i = 0;
+
+  function playStep() {
+    if (i >= steps.length) {
+      state.running = false;
+      const lastStatus = steps[steps.length - 1]?.status;
+      appendTraceStatus(lastStatus === 'error');
+      if (actionEl) { actionEl.classList.remove('running'); actionEl.classList.add('active'); }
+      return;
+    }
+
+    const step = steps[i];
+    elapsed += step.ms || 0;
+
+    const nodeStatus = step.status === 'error' ? 'error' : step.status === 'warn' ? 'warn' : 'active';
+    setNodeState(step.from, nodeStatus);
+    setNodeState(step.to,   nodeStatus);
+
+    animateDot(step);
+    appendTraceRow(step, elapsed);
+
+    i++;
+    _animTimer = setTimeout(playStep, 680);
+  }
+
+  playStep();
+}
+
+function replayAction() {
+  if (state.running) return;
+  const action = ACTIONS.find(a => a.id === state.selectedAction);
+  if (action) {
+    clearTrace();
+    resetAllNodes();
+    playAction(action);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+function init() {
+  renderLeftPanel();
+  renderGraph();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
