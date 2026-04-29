@@ -26,7 +26,7 @@ It exposes the full **Sonatype Nexus OSS v1 REST API** at `/service/rest/v1/` fo
 
 ## Status
 
-> Active development. Core functionality is production-ready. See the [interactive architecture diagram](docs/architecture.html) for a full picture of implemented subsystems.
+> Active development. Core functionality is production-ready. See the [interactive architecture diagram](architecture.html) for a full picture of implemented subsystems.
 
 Phase milestones completed: Authentication (local/LDAP/OIDC), all 12 format handlers, RBAC + content selectors, webhooks, audit log, vulnerability scanning, cleanup policies (with dry-run + retain-N-versions), per-repository blob store routing (local + S3), full backup/restore, per-repository export/import, and live migration from Nexus OSS/Pro.
 
@@ -92,7 +92,7 @@ Phase milestones completed: Authentication (local/LDAP/OIDC), all 12 format hand
 
 ## Screenshots
 
-> _Screenshots of the running application. Open `docs/architecture.html` in a browser for an interactive request-flow diagram._
+> _Screenshots of the running application. Open `architecture.html` in a browser for an interactive request-flow diagram._
 
 ### Dashboard & Repositories
 
@@ -137,7 +137,7 @@ Phase milestones completed: Authentication (local/LDAP/OIDC), all 12 format hand
 
 ## Interactive Architecture Diagram
 
-Open **[`architecture.html`](docs/architecture.html)** in any browser to explore the full request-flow diagram:
+Open **[`architecture.html`](architecture.html)** in any browser to explore the full request-flow diagram:
 
 - Click any action in the left panel to animate the request path through the system
 - Toggle services (PostgreSQL, BlobStore, LDAP, S3, etc.) to see failure scenarios
