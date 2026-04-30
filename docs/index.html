@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexspence — Universal Artifact Repository Manager</title>
+<meta name="description" content="Free, open-source alternative to Sonatype Nexus. Manage Maven, Docker, npm, PyPI, Helm and 9 more formats in one self-hosted registry.">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070b14;--bg2:#0c1322;
+  --blue:#3b82f6;--cyan:#06b6d4;--green:#22c55e;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;
+  --text:#f1f5f9;--dim:#94a3b8;--faint:#475569;
+  --glass:rgba(255,255,255,.04);--glasm:rgba(255,255,255,.07);
+  --border:rgba(59,130,246,.14);--borhi:rgba(59,130,246,.38);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--blue),var(--purple));border-radius:3px}
+
+/* ── Floating nav ── */
+.floatnav{
+  position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  z-index:200;
+  display:flex;align-items:center;gap:2px;
+  background:rgba(7,11,20,.85);
+  border:1px solid var(--border);
+  border-radius:100px;
+  padding:5px;
+  backdrop-filter:blur(20px) saturate(160%);
+  box-shadow:0 8px 32px rgba(0,0,0,.5),0 0 0 1px rgba(59,130,246,.1);
+  transition:box-shadow 300ms;
+  white-space:nowrap;
+  overflow-x:auto;
+  max-width:calc(100vw - 32px);
+}
+.floatnav::-webkit-scrollbar{height:0}
+.nav-logo-mini{display:flex;align-items:center;gap:6px;padding:4px 12px 4px 8px;border-right:1px solid var(--border);margin-right:4px;flex-shrink:0}
+.nav-logo-mini img{width:20px;height:20px;object-fit:contain}
+.nav-logo-mini span{font-size:.78rem;font-weight:700;color:var(--text)}
+.npill{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 12px;border-radius:100px;
+  border:none;background:transparent;color:var(--dim);
+  font-size:.75rem;font-weight:500;cursor:pointer;
+  font-family:'Inter',system-ui,sans-serif;
+  transition:all 180ms;white-space:nowrap;
+}
+.npill svg{width:12px;height:12px;flex-shrink:0}
+.npill:hover{color:var(--text);background:var(--glasm)}
+.npill.active{color:#fff;background:var(--blue)}
+
+/* ── Sections ── */
+.sect{min-height:100vh;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden}
+.sect-wrap{max-width:1200px;margin:0 auto;padding:80px 24px 60px;width:100%}
+
+/* ── Reveal ── */
+.rev{opacity:0;transform:translateY(32px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.rev.vis{opacity:1;transform:translateY(0)}
+.rev-l{opacity:0;transform:translateX(-32px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.rev-l.vis{opacity:1;transform:translateX(0)}
+.rev-r{opacity:0;transform:translateX(32px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.rev-r.vis{opacity:1;transform:translateX(0)}
+.d1{transition-delay:.1s}.d2{transition-delay:.2s}.d3{transition-delay:.3s}.d4{transition-delay:.4s}.d5{transition-delay:.5s}
+
+/* ── Cards ── */
+.card{background:var(--glass);border:1px solid var(--border);border-radius:14px;backdrop-filter:blur(10px);transition:all 200ms;position:relative;overflow:hidden}
+.card::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(59,130,246,.45),transparent);opacity:0;transition:opacity 200ms}
+.card:hover{background:var(--glasm);border-color:var(--borhi);transform:translateY(-2px);box-shadow:0 10px 40px rgba(0,0,0,.4)}
+.card:hover::after{opacity:1}
+
+/* ── Grids ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media(max-width:900px){.g3,.g4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:580px){.g2{grid-template-columns:1fr}}
+
+/* ── Section header ── */
+.stag{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--blue);display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.stag::before{content:'';width:14px;height:2px;background:var(--blue);border-radius:1px}
+.stitle{font-size:clamp(1.8rem,4.5vw,3rem);font-weight:900;letter-spacing:-.03em;line-height:1.08;margin-bottom:14px}
+.ssub{font-size:1rem;color:var(--dim);line-height:1.7;max-width:560px}
+
+/* ── ① HERO ── */
+#overview{
+  background:
+    radial-gradient(ellipse 70% 55% at 50% -5%,rgba(59,130,246,.22) 0%,transparent 55%),
+    radial-gradient(ellipse 50% 40% at 85% 85%,rgba(139,92,246,.14) 0%,transparent 50%),
+    radial-gradient(ellipse 55% 45% at 10% 70%,rgba(6,182,212,.1) 0%,transparent 50%);
+}
+.grid-bg{position:absolute;inset:0;background-image:linear-gradient(rgba(59,130,246,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.055) 1px,transparent 1px);background-size:60px 60px;mask-image:radial-gradient(ellipse 80% 80% at 50% 40%,black,transparent)}
+#particles{position:absolute;inset:0;pointer-events:none}
+
+.hero-layout{display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap}
+.hero-left{flex:1;min-width:300px}
+.hero-right{flex-shrink:0}
+.hero-badge{display:inline-flex;align-items:center;gap:7px;background:var(--glass);border:1px solid var(--border);border-radius:100px;padding:5px 14px 5px 8px;font-size:.76rem;font-weight:500;color:var(--blue);margin-bottom:22px;backdrop-filter:blur(10px)}
+.hdot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hero-title{font-size:clamp(2.2rem,6vw,4.2rem);font-weight:900;letter-spacing:-.03em;line-height:1.06;margin-bottom:18px}
+.hero-title .grad{background:linear-gradient(135deg,var(--blue) 0%,var(--cyan) 45%,var(--purple) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:1.1rem;color:var(--dim);max-width:520px;line-height:1.7;margin-bottom:28px}
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:28px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:8px;font-weight:600;font-size:.9rem;text-decoration:none;cursor:pointer;border:none;transition:all 180ms;font-family:'Inter',system-ui,sans-serif;white-space:nowrap}
+.btn-primary{background:var(--blue);color:#fff;box-shadow:0 0 0 0 rgba(59,130,246,.4)}
+.btn-primary:hover{background:#2563eb;box-shadow:0 0 24px rgba(59,130,246,.4);transform:translateY(-1px)}
+.btn-ghost{background:var(--glass);color:var(--dim);border:1px solid var(--border);backdrop-filter:blur(10px)}
+.btn-ghost:hover{background:var(--glasm);color:var(--text);border-color:var(--borhi);transform:translateY(-1px)}
+.btn svg{width:16px;height:16px}
+
+.hero-logo{width:220px;height:220px;object-fit:contain;filter:drop-shadow(0 0 40px rgba(59,130,246,.45));animation:floatimg 6s ease-in-out infinite}
+@keyframes floatimg{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-12px) rotate(1deg)}}
+
+.fmt-pills{display:flex;gap:7px;flex-wrap:wrap}
+.fpill{display:inline-flex;align-items:center;gap:5px;background:var(--glass);border:1px solid var(--border);border-radius:100px;padding:4px 12px;font-size:.73rem;font-weight:500;color:var(--dim);transition:all 180ms;cursor:default}
+.fpill:hover{color:var(--text);border-color:var(--borhi);background:var(--glasm)}
+.fdot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+
+/* ── Stats band ── */
+.stats-band{background:linear-gradient(135deg,rgba(59,130,246,.1),rgba(139,92,246,.06));border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr)}
+.sitem{padding:28px 20px;text-align:center;border-right:1px solid var(--border)}
+.sitem:last-child{border-right:none}
+.snum{font-size:2.2rem;font-weight:800;letter-spacing:-.03em;background:linear-gradient(135deg,var(--blue),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:5px}
+.slbl{font-size:.76rem;color:var(--dim);font-weight:500}
+
+/* ── ② FORMATS ── */
+#formats{background:var(--bg2)}
+.fmcard{padding:20px 14px;text-align:center}
+.fmicon{width:46px;height:46px;border-radius:11px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:.85rem;font-weight:800;font-family:'JetBrains Mono',monospace}
+.fmname{font-size:.85rem;font-weight:700;margin-bottom:2px}
+.fmproto{font-size:.68rem;color:var(--faint);font-family:'JetBrains Mono',monospace}
+.fmtypes{display:flex;gap:3px;justify-content:center;margin-top:8px;flex-wrap:wrap}
+.ftag{font-size:.6rem;font-weight:600;padding:2px 6px;border-radius:4px}
+.t-b{background:rgba(59,130,246,.12);color:var(--blue);border:1px solid rgba(59,130,246,.25)}
+.t-a{background:rgba(245,158,11,.1);color:var(--amber);border:1px solid rgba(245,158,11,.25)}
+.t-p{background:rgba(139,92,246,.12);color:var(--purple);border:1px solid rgba(139,92,246,.25)}
+
+/* ── ③ ARCHITECTURE ── */
+#architecture{
+  background:
+    radial-gradient(ellipse 60% 50% at 0% 50%,rgba(59,130,246,.1) 0%,transparent 50%),
+    radial-gradient(ellipse 50% 40% at 100% 50%,rgba(139,92,246,.08) 0%,transparent 50%);
+}
+.arch{display:flex;flex-direction:column;gap:5px}
+.alayer{display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:10px;border:1px solid var(--border);background:var(--glass);transition:all 200ms;cursor:default}
+.alayer:hover{border-color:var(--borhi);background:var(--glasm)}
+.albl{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);min-width:110px}
+.achips{display:flex;flex-wrap:wrap;gap:5px}
+.achip{font-size:.72rem;font-weight:500;padding:2px 8px;border-radius:5px;background:var(--glasm);border:1px solid var(--border);font-family:'JetBrains Mono',monospace}
+.aarr{color:var(--faint);text-align:center;padding:2px 0;margin-left:18px;font-size:.9rem}
+
+/* ── ④ SECURITY ── */
+#security{background:var(--bg2)}
+.pgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}
+.pitem{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid var(--border);font-size:.8rem;font-weight:600;transition:all 180ms;cursor:default}
+.pitem:hover{background:rgba(255,255,255,.08);border-color:var(--borhi)}
+.pitem svg{width:18px;height:18px;flex-shrink:0}
+.cl{list-style:none;display:flex;flex-direction:column;gap:8px}
+.cl li{display:flex;gap:8px;align-items:flex-start;font-size:.83rem;color:var(--dim);line-height:1.55}
+.cl li::before{content:'';width:16px;height:16px;border-radius:50%;flex-shrink:0;margin-top:1px;background:linear-gradient(135deg,var(--blue),var(--cyan));background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3E%3Cpath fill-rule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clip-rule='evenodd'/%3E%3C/svg%3E");background-size:10px;background-position:center;background-repeat:no-repeat}
+
+/* ── ⑤ DEPLOY ── */
+#deploy{
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 100%,rgba(59,130,246,.16) 0%,transparent 55%);
+}
+.cblock{background:rgba(0,0,0,.55);border:1px solid rgba(59,130,246,.18);border-radius:10px;overflow:hidden}
+.chdr{display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(255,255,255,.025);border-bottom:1px solid rgba(59,130,246,.1)}
+.cdot{width:9px;height:9px;border-radius:50%}
+.ctitle{margin-left:auto;font-size:.66rem;font-weight:600;color:var(--faint);font-family:'JetBrains Mono',monospace}
+.cbody{padding:16px;font-family:'JetBrains Mono',monospace;font-size:.76rem;line-height:1.8;overflow-x:auto;white-space:pre;color:var(--dim)}
+.ck{color:var(--cyan)}.cs{color:var(--green)}.cc{color:var(--faint)}.cn{color:var(--blue)}.cm{color:var(--amber)}
+.dstep{display:flex;gap:14px;padding:16px;border-radius:10px;border:1px solid var(--border);background:var(--glass);transition:all 200ms;margin-bottom:10px}
+.dstep:hover{border-color:var(--borhi);background:var(--glasm)}
+.dnum{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800;color:#fff;flex-shrink:0}
+.dt{font-size:.9rem;font-weight:700;margin-bottom:3px}
+.dd{font-size:.78rem;color:var(--dim);line-height:1.6}
+
+/* ── ⑥ COMPARE ── */
+#compare{background:var(--bg2)}
+.ctable{width:100%;border-collapse:collapse;font-size:.82rem}
+.ctable th{padding:11px 14px;text-align:left;font-weight:700;font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);border-bottom:1px solid var(--border)}
+.ctable td{padding:12px 14px;border-bottom:1px solid rgba(59,130,246,.05);vertical-align:middle}
+.ctable tr:last-child td{border-bottom:none}
+.ctable tr:hover td{background:rgba(255,255,255,.02)}
+.y{color:var(--green);font-weight:600}.n{color:var(--red)}.p{color:var(--amber)}
+.thnx{color:var(--blue)}
+
+/* ── Footer ── */
+.footer{background:rgba(7,11,20,.95);border-top:1px solid var(--border);padding:32px 24px;text-align:center}
+.footer-logo{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:10px}
+.footer-logo img{width:24px;height:24px;object-fit:contain}
+.footer-logo span{font-size:.9rem;font-weight:700}
+.footer-sub{font-size:.78rem;color:var(--faint);margin-bottom:16px}
+.footer-links{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+.footer-links a{font-size:.78rem;color:var(--faint);text-decoration:none;transition:color 180ms}
+.footer-links a:hover{color:var(--text)}
+
+/* ── Glow separator ── */
+.gline{height:1px;background:linear-gradient(90deg,transparent,var(--blue),transparent);opacity:.28}
+
+/* ── CTA box ── */
+.cta-box{background:linear-gradient(135deg,rgba(59,130,246,.1),rgba(139,92,246,.07));border:1px solid rgba(59,130,246,.25);border-radius:14px;padding:28px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:20px}
+.cta-box .ct{font-size:1.05rem;font-weight:700;margin-bottom:5px}
+.cta-box .cs{font-size:.82rem;color:var(--dim)}
+
+/* ── Nav actions ── */
+.nav-actions{display:flex;align-items:center;gap:4px;margin-left:4px;padding-left:6px;border-left:1px solid var(--border);flex-shrink:0}
+.nav-gh{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:100px;background:transparent;border:none;color:var(--dim);font-size:.72rem;font-weight:500;cursor:pointer;font-family:'Inter',system-ui,sans-serif;transition:all 180ms;text-decoration:none;white-space:nowrap}
+.nav-gh:hover{color:var(--text);background:var(--glasm)}
+.nav-gh svg{width:13px;height:13px;flex-shrink:0}
+.nav-deploy{display:inline-flex;align-items:center;gap:5px;padding:5px 13px;border-radius:100px;background:var(--blue);border:none;color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;font-family:'Inter',system-ui,sans-serif;transition:all 180ms;text-decoration:none;white-space:nowrap}
+.nav-deploy:hover{background:#2563eb;box-shadow:0 0 14px rgba(59,130,246,.45)}
+.nav-deploy svg{width:12px;height:12px;flex-shrink:0}
+
+/* ── Feature cards ── */
+.fc{padding:22px 20px;display:flex;flex-direction:column;gap:10px}
+.fic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fic svg{width:20px;height:20px}
+.fn{font-size:.88rem;font-weight:700}
+.fd{font-size:.77rem;color:var(--dim);line-height:1.62}
+
+/* ── Responsive ── */
+@media(max-width:768px){.hero-right{display:none}.stats-grid{grid-template-columns:repeat(2,1fr)}.floatnav .npill span{display:none}.nav-deploy span{display:none}}
+@media(max-width:580px){.nav-gh span{display:none}}
+@media(prefers-reduced-motion:reduce){.rev,.rev-l,.rev-r{transition:none;opacity:1;transform:none}.hero-logo{animation:none}}
+</style>
+</head>
+<body>
+
+<!-- ════ FLOATING NAV ════ -->
+<nav class="floatnav" aria-label="Section navigation">
+  <div class="nav-logo-mini">
+    <img src="assets/mini_logo.png" alt="Nexspence" width="20" height="20">
+    <span>Nexspence</span>
+  </div>
+  <button class="npill active" data-target="overview" aria-label="Go to Overview">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    <span>Overview</span>
+  </button>
+  <button class="npill" data-target="formats" aria-label="Go to Formats">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+    <span>Formats</span>
+  </button>
+  <button class="npill" data-target="architecture" aria-label="Go to Architecture">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    <span>Arch</span>
+  </button>
+  <button class="npill" data-target="security" aria-label="Go to Security">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    <span>Security</span>
+  </button>
+  <button class="npill" data-target="deploy" aria-label="Go to Deploy">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+    <span>Deploy</span>
+  </button>
+  <button class="npill" data-target="compare" aria-label="Go to Compare">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    <span>vs Nexus</span>
+  </button>
+  <div class="nav-actions">
+    <a href="https://github.com/skensell201/nexspence" target="_blank" rel="noopener" class="nav-gh" aria-label="GitHub repository">
+      <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+      <span>GitHub</span>
+    </a>
+    <a href="#deploy" class="nav-deploy" aria-label="Quick deploy">
+      <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      <span>Deploy</span>
+    </a>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════ -->
+<!-- ①  OVERVIEW                  -->
+<!-- ══════════════════════════════ -->
+<section id="overview" class="sect" aria-label="Overview">
+  <div class="grid-bg" aria-hidden="true"></div>
+  <canvas id="particles" aria-hidden="true"></canvas>
+  <div class="sect-wrap" style="position:relative;z-index:1">
+    <div class="hero-layout">
+      <div class="hero-left">
+        <div class="hero-badge rev"><span class="hdot" aria-hidden="true"></span>Free &amp; Open Source — No License Fees</div>
+        <h1 class="hero-title rev d1">
+          Universal Artifact<br>
+          <span class="grad">Repository Manager</span>
+        </h1>
+        <p class="hero-sub rev d2">Drop-in replacement for Sonatype Nexus. Manage Maven, Docker, npm, PyPI, Helm and 7 more formats — in one self-hosted registry, forever free.</p>
+        <div class="hero-actions rev d3">
+          <a href="#deploy" class="btn btn-primary">
+            <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            Quick Deploy
+          </a>
+          <a href="https://github.com/skensell201/nexspence" target="_blank" rel="noopener" class="btn btn-ghost">
+            <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            Star on GitHub
+          </a>
+        </div>
+        <div class="fmt-pills rev d4" role="list" aria-label="Supported formats">
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#c0392b" aria-hidden="true"></span>Maven</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#cb3837" aria-hidden="true"></span>npm</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#2496ed" aria-hidden="true"></span>Docker</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#3776ab" aria-hidden="true"></span>PyPI</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#00add8" aria-hidden="true"></span>Go Modules</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#5ba8db" aria-hidden="true"></span>NuGet</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#277a9f" aria-hidden="true"></span>Helm</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#ce422b" aria-hidden="true"></span>Cargo</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#e05574" aria-hidden="true"></span>Apt</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#ef4444" aria-hidden="true"></span>Yum</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#8b5cf6" aria-hidden="true"></span>Conan</span>
+          <span class="fpill" role="listitem"><span class="fdot" style="background:#475569" aria-hidden="true"></span>Raw</span>
+        </div>
+      </div>
+      <div class="hero-right rev d2">
+        <img src="assets/mini_logo.png" alt="Nexspence logo" class="hero-logo" width="220" height="220">
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats band -->
+  <div class="stats-band" role="region" aria-label="Statistics">
+    <div style="max-width:1200px;margin:0 auto">
+      <div class="stats-grid">
+        <div class="sitem rev"><div class="snum" data-count="12">12</div><div class="slbl">Artifact Formats</div></div>
+        <div class="sitem rev d1"><div class="snum" style="background:linear-gradient(135deg,var(--green),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text" data-count="335">335</div><div class="slbl">Go Tests Passing</div></div>
+        <div class="sitem rev d2"><div class="snum" style="background:linear-gradient(135deg,var(--purple),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">100%</div><div class="slbl">Nexus API Compat</div></div>
+        <div class="sitem rev d3"><div class="snum" style="background:linear-gradient(135deg,var(--amber),var(--red));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">$0</div><div class="slbl">License Fee</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature highlights -->
+  <div style="max-width:1200px;margin:0 auto;padding:40px 24px 60px;position:relative;z-index:1">
+    <div class="g3">
+      <div class="card fc rev">
+        <div class="fic" style="background:rgba(59,130,246,.12)"><svg fill="none" stroke="#3b82f6" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+        <div class="fn">Migrate from Nexus</div>
+        <div class="fd">Stream all repos, users, and artifacts from a live Nexus instance in one command. Pausable, conflict-safe.</div>
+      </div>
+      <div class="card fc rev d1">
+        <div class="fic" style="background:rgba(139,92,246,.12)"><svg fill="none" stroke="#8b5cf6" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg></div>
+        <div class="fn">Webhooks &amp; Events</div>
+        <div class="fd">Async fire-and-forget delivery for artifact.published, artifact.deleted, repo.created. Slack, CI-CD, and more.</div>
+      </div>
+      <div class="card fc rev d2">
+        <div class="fic" style="background:rgba(245,158,11,.1)"><svg fill="none" stroke="#f59e0b" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <div class="fn">OIDC / SSO Built-in</div>
+        <div class="fd">Keycloak, Google, Entra ID, Okta. JIT user provisioning, group-to-role mapping from IdP claims.</div>
+      </div>
+      <div class="card fc rev d1">
+        <div class="fic" style="background:rgba(34,197,94,.1)"><svg fill="none" stroke="#22c55e" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        <div class="fn">Cleanup Policies</div>
+        <div class="fd">Automated retention rules: max age, last-downloaded threshold, retain-N-versions. CRON scheduling.</div>
+      </div>
+      <div class="card fc rev d2">
+        <div class="fic" style="background:rgba(6,182,212,.1)"><svg fill="none" stroke="#06b6d4" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+        <div class="fn">S3-Compatible Storage</div>
+        <div class="fd">Route any repository to MinIO, AWS S3, Wasabi, or local filesystem. Per-repo blob store assignment.</div>
+      </div>
+      <div class="card fc rev d3">
+        <div class="fic" style="background:rgba(239,68,68,.1)"><svg fill="none" stroke="#ef4444" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+        <div class="fn">Audit Log &amp; CVE Scan</div>
+        <div class="fd">90-day audit trail with NDJSON streaming export. Trivy-powered Docker image scanning, results cached per component.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="gline"></div>
+
+<!-- ══════════════════════════════ -->
+<!-- ②  FORMATS                   -->
+<!-- ══════════════════════════════ -->
+<section id="formats" class="sect" aria-label="Supported formats">
+  <div class="sect-wrap">
+    <div class="rev" style="text-align:center;margin-bottom:36px">
+      <div class="stag" style="justify-content:center">12 Formats</div>
+      <h2 class="stitle">One registry for all your artifacts</h2>
+      <p class="ssub" style="margin:0 auto">Every format supports Hosted, Proxy, and Group types. One URL for your entire organization.</p>
+    </div>
+    <div class="g4">
+      <div class="card fmcard rev"><div class="fmicon" style="background:rgba(192,57,43,.12);color:#c0392b">M2</div><div class="fmname">Maven</div><div class="fmproto">Maven 2/3</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span><span class="ftag t-p">Group</span></div></div>
+      <div class="card fmcard rev d1"><div class="fmicon" style="background:rgba(204,53,52,.12);color:#cb3837">npm</div><div class="fmname">npm</div><div class="fmproto">Registry v1</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span><span class="ftag t-p">Group</span></div></div>
+      <div class="card fmcard rev d2"><div class="fmicon" style="background:rgba(36,150,237,.12);color:#2496ed"><svg width="22" height="22" fill="#2496ed" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.983 11.078h2.119a.186.186 0 0 0 .186-.185V9.006a.186.186 0 0 0-.186-.186h-2.119a.185.185 0 0 0-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 0 0 .186-.186V3.574a.186.186 0 0 0-.186-.185h-2.118a.185.185 0 0 0-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 0 0 .186-.186V6.29a.186.186 0 0 0-.186-.185h-2.118a.185.185 0 0 0-.185.185v1.887c0 .102.082.186.185.186m-2.93 0h2.12a.186.186 0 0 0 .184-.186V6.29a.185.185 0 0 0-.185-.185H8.1a.185.185 0 0 0-.185.185v1.887c0 .102.083.186.185.186m-2.964 0h2.119a.186.186 0 0 0 .185-.186V6.29a.185.185 0 0 0-.185-.185H5.136a.186.186 0 0 0-.186.185v1.887c0 .102.084.186.186.186m5.893 2.715h2.118a.186.186 0 0 0 .186-.185V9.006a.186.186 0 0 0-.186-.186h-2.118a.185.185 0 0 0-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 0 0 .184-.185V9.006a.185.185 0 0 0-.184-.186h-2.12a.185.185 0 0 0-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 0 0 .185-.185V9.006a.185.185 0 0 0-.184-.186h-2.12a.186.186 0 0 0-.186.185v1.888c0 .102.084.185.186.185m-2.92 0h2.12a.186.186 0 0 0 .184-.185V9.006a.185.185 0 0 0-.184-.186h-2.12a.185.185 0 0 0-.184.185v1.888c0 .102.082.185.184.185"/></svg></div><div class="fmname">Docker</div><div class="fmproto">OCI Distrib. v2</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span><span class="ftag t-p">Group</span></div></div>
+      <div class="card fmcard rev d3"><div class="fmicon" style="background:rgba(55,118,171,.12);color:#3776ab">Py</div><div class="fmname">PyPI</div><div class="fmproto">Simple Index</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span><span class="ftag t-p">Group</span></div></div>
+      <div class="card fmcard rev d1"><div class="fmicon" style="background:rgba(0,173,216,.12);color:#00add8">Go</div><div class="fmname">Go Modules</div><div class="fmproto">GOPROXY v2</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span></div></div>
+      <div class="card fmcard rev d2"><div class="fmicon" style="background:rgba(0,72,128,.12);color:#5ba8db">Nu</div><div class="fmname">NuGet</div><div class="fmproto">v2 OData / v3</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span><span class="ftag t-p">Group</span></div></div>
+      <div class="card fmcard rev d3"><div class="fmicon" style="background:rgba(39,122,159,.12);color:#277a9f"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#277a9f" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg></div><div class="fmname">Helm</div><div class="fmproto">Chart Repo</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span></div></div>
+      <div class="card fmcard rev d4"><div class="fmicon" style="background:rgba(206,66,43,.12);color:#ce422b">Rs</div><div class="fmname">Cargo</div><div class="fmproto">Sparse Index</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span></div></div>
+      <div class="card fmcard rev d2"><div class="fmicon" style="background:rgba(168,0,48,.12);color:#e05574">deb</div><div class="fmname">Apt</div><div class="fmproto">Debian Packages</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span></div></div>
+      <div class="card fmcard rev d3"><div class="fmicon" style="background:rgba(238,0,0,.1);color:#ef4444">RPM</div><div class="fmname">Yum / RPM</div><div class="fmproto">repomd.xml</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span></div></div>
+      <div class="card fmcard rev d4"><div class="fmicon" style="background:rgba(139,92,246,.12);color:#8b5cf6">C++</div><div class="fmname">Conan</div><div class="fmproto">Conan v1</div><div class="fmtypes"><span class="ftag t-b">Hosted</span><span class="ftag t-a">Proxy</span></div></div>
+      <div class="card fmcard rev d5"><div class="fmicon" style="background:rgba(71,85,105,.12);color:#94a3b8"><svg width="20" height="20" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="fmname">Raw</div><div class="fmproto">PUT/GET/DELETE</div><div class="fmtypes"><span class="ftag t-b">Hosted</span></div></div>
+    </div>
+  </div>
+</section>
+
+<div class="gline"></div>
+
+<!-- ══════════════════════════════ -->
+<!-- ③  ARCHITECTURE              -->
+<!-- ══════════════════════════════ -->
+<section id="architecture" class="sect" aria-label="Architecture">
+  <div class="sect-wrap">
+    <div class="g2" style="align-items:center;gap:48px">
+      <div class="rev-l">
+        <div class="stag">Clean Architecture</div>
+        <h2 class="stitle">Handler → Service → Repository</h2>
+        <p class="ssub" style="margin-bottom:28px">No circular imports. All DB access through mockable interfaces. Plugin-style format handlers for each of the 12 formats.</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:36px;height:36px;border-radius:8px;background:rgba(0,173,216,.12);display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:800;font-family:'JetBrains Mono',monospace;color:#00add8;flex-shrink:0">Go</div><div><div style="font-size:.88rem;font-weight:700">Go (Golang) + Gin</div><div style="font-size:.74rem;color:var(--dim)">Backend · pgx · golang-migrate</div></div></div>
+          <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:36px;height:36px;border-radius:8px;background:rgba(97,218,251,.1);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800;color:#61dafb;flex-shrink:0">Re</div><div><div style="font-size:.88rem;font-weight:700">React + TypeScript</div><div style="font-size:.74rem;color:var(--dim)">Vite · Zustand · React Query</div></div></div>
+          <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:36px;height:36px;border-radius:8px;background:rgba(51,103,145,.12);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#336791;flex-shrink:0">PG</div><div><div style="font-size:.88rem;font-weight:700">PostgreSQL + pgxpool</div><div style="font-size:.74rem;color:var(--dim)">Database · goose migrations</div></div></div>
+          <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:36px;height:36px;border-radius:8px;background:rgba(240,180,0,.1);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;font-family:'JetBrains Mono',monospace;color:#f59e0b;flex-shrink:0">S3</div><div><div style="font-size:.88rem;font-weight:700">S3 / MinIO Blob Store</div><div style="font-size:.74rem;color:var(--dim)">Local filesystem or any S3-compatible</div></div></div>
+        </div>
+      </div>
+      <div class="rev-r">
+        <div style="font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin-bottom:12px">Request Flow</div>
+        <div class="arch">
+          <div class="alayer"><div class="albl">HTTP / Router</div><div class="achips"><span class="achip">Gin</span><span class="achip">RBAC</span><span class="achip">AuthMiddleware</span><span class="achip">Audit</span></div></div>
+          <div class="aarr" aria-hidden="true">↓</div>
+          <div class="alayer"><div class="albl">Handlers</div><div class="achips"><span class="achip">AuthHandler</span><span class="achip">ComponentHandler</span><span class="achip">BackupHandler</span></div></div>
+          <div class="aarr" aria-hidden="true">↓</div>
+          <div class="alayer"><div class="albl">Format Handlers</div><div class="achips"><span class="achip">Docker</span><span class="achip">Maven</span><span class="achip">npm</span><span class="achip">Helm</span><span class="achip">+8</span></div></div>
+          <div class="aarr" aria-hidden="true">↓</div>
+          <div class="alayer"><div class="albl">Services</div><div class="achips"><span class="achip">RepositoryService</span><span class="achip">UserService</span><span class="achip">WebhookService</span></div></div>
+          <div class="aarr" aria-hidden="true">↓</div>
+          <div class="alayer"><div class="albl">Repository</div><div class="achips"><span class="achip">ComponentRepo</span><span class="achip">AssetRepo</span><span class="achip">AuditRepo</span></div></div>
+          <div class="aarr" aria-hidden="true">↓</div>
+          <div class="alayer"><div class="albl">Storage</div><div class="achips"><span class="achip">PostgreSQL</span><span class="achip">LocalBlobStore</span><span class="achip">S3BlobStore</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="gline"></div>
+
+<!-- ══════════════════════════════ -->
+<!-- ④  SECURITY                  -->
+<!-- ══════════════════════════════ -->
+<section id="security" class="sect" aria-label="Security">
+  <div class="sect-wrap">
+    <div class="rev" style="text-align:center;margin-bottom:36px">
+      <div class="stag" style="justify-content:center">Security</div>
+      <h2 class="stitle">Enterprise Auth — Zero Cost</h2>
+      <p class="ssub" style="margin:0 auto">OIDC SSO, LDAP, API tokens, JWT, and fine-grained RBAC with CEL content selectors — all built in.</p>
+    </div>
+    <div class="g2">
+      <div class="card rev-l" style="padding:24px">
+        <div style="font-size:.9rem;font-weight:700;margin-bottom:8px">OIDC / SSO Providers</div>
+        <div style="font-size:.8rem;color:var(--dim);margin-bottom:14px;line-height:1.6">Auth code + PKCE. AES-256-GCM sealed state cookie. JIT provisioning. Group-to-role mapping from IdP claims.</div>
+        <div class="pgrid">
+          <div class="pitem"><svg width="18" height="18" viewBox="0 0 24 24" fill="#f97316" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm0 14c-2.03 0-4.43-.82-6.14-2.88C7.55 15.8 9.68 15 12 15s4.45.8 6.14 2.12C16.43 19.18 14.03 20 12 20z"/></svg>Keycloak</div>
+          <div class="pitem"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>Google</div>
+          <div class="pitem"><svg width="18" height="18" viewBox="0 0 24 24" fill="#0078d4" aria-hidden="true"><path d="M0 0h11.377v11.372H0zm12.623 0H24v11.372H12.623zM0 12.623h11.377V24H0zm12.623 0H24V24H12.623z"/></svg>Azure Entra</div>
+          <div class="pitem"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#007dc1"/><circle cx="12" cy="12" r="3" fill="white"/></svg>Okta</div>
+        </div>
+      </div>
+      <div class="card rev-r" style="padding:24px">
+        <div style="font-size:.9rem;font-weight:700;margin-bottom:8px">Authentication Methods</div>
+        <div style="font-size:.8rem;color:var(--dim);margin-bottom:14px;line-height:1.6">Multiple strategies in one middleware — no extra config per client type.</div>
+        <ul class="cl">
+          <li>JWT Bearer tokens — short-lived, configurable max days</li>
+          <li>API Tokens <code style="font-family:'JetBrains Mono',monospace;font-size:.72rem;background:var(--glasm);padding:1px 5px;border-radius:4px">nxs_*</code> — SHA-256 hash only stored</li>
+          <li>HTTP Basic — username/password or API token as password</li>
+          <li>LDAP bind with JIT sync and admin role mapping</li>
+          <li>Anonymous read-through for public repos</li>
+        </ul>
+      </div>
+      <div class="card rev-l" style="padding:24px">
+        <div style="font-size:.9rem;font-weight:700;margin-bottom:8px">RBAC + Content Selectors</div>
+        <div style="font-size:.8rem;color:var(--dim);margin-bottom:14px;line-height:1.6">CEL expression path-level scoping. Nexus-compatible privilege model.</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.76rem;line-height:2;color:var(--dim)"><span style="color:var(--purple)">User</span> → <span style="color:var(--blue)">Role</span> → <span style="color:var(--cyan)">Privilege</span> → <span style="color:var(--green)">Content Selector</span></div>
+        <div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:.74rem;color:var(--green);line-height:1.7">format == "maven2" &amp;&amp;<br>path =~ "^/com/example/"</div>
+      </div>
+      <div class="card rev-r" style="padding:24px">
+        <div style="font-size:.9rem;font-weight:700;margin-bottom:8px">CVE Scanning + Audit Logs</div>
+        <div style="font-size:.8rem;color:var(--dim);margin-bottom:14px;line-height:1.6">Trivy-based Docker image scanning. 90-day audit trail with NDJSON export.</div>
+        <ul class="cl">
+          <li>Scan on-demand via <code style="font-family:'JetBrains Mono',monospace;font-size:.7rem;background:var(--glasm);padding:1px 5px;border-radius:4px">GET /api/v1/components/:id/scan</code></li>
+          <li>Results cached in component.extra JSON</li>
+          <li>Audit log: date/user filters, NDJSON streaming export</li>
+          <li>90-day retention via monthly partition rotation</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="gline"></div>
+
+<!-- ══════════════════════════════ -->
+<!-- ⑤  DEPLOY                    -->
+<!-- ══════════════════════════════ -->
+<section id="deploy" class="sect" aria-label="Deploy">
+  <div class="sect-wrap">
+    <div class="g2" style="align-items:start;gap:40px">
+      <div class="rev-l">
+        <div class="stag">Quick Deploy</div>
+        <h2 class="stitle">Running in 2 minutes</h2>
+        <p class="ssub" style="margin-bottom:24px">Docker Compose brings up PostgreSQL, Go server, and React UI in one command. Auto-migrates on start.</p>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="dstep"><div class="dnum">1</div><div><div class="dt">Configure &amp; start</div><div class="dd">Set <code style="font-family:'JetBrains Mono',monospace;font-size:.72rem">NEXSPENCE_BOOTSTRAP_ADMIN_PASSWORD</code> and run <code style="font-family:'JetBrains Mono',monospace;font-size:.72rem">docker compose up</code>. Migrations run automatically on start.</div></div></div>
+          <div class="dstep"><div class="dnum">2</div><div><div class="dt">Open the UI</div><div class="dd">Web UI &amp; REST API at <code style="font-family:'JetBrains Mono',monospace;font-size:.72rem">http://localhost:8081</code>. Docker registry on port <code style="font-family:'JetBrains Mono',monospace;font-size:.72rem">5000</code>. Login: <code style="font-family:'JetBrains Mono',monospace;font-size:.72rem">admin / changeme</code>.</div></div></div>
+          <div class="dstep"><div class="dnum">3</div><div><div class="dt">Create repositories</div><div class="dd">Create Hosted / Proxy / Group repos for each format. 100% Nexus API compatible — no client-side tool changes needed.</div></div></div>
+          <div class="dstep"><div class="dnum">4</div><div><div class="dt">Migrate from Nexus (optional)</div><div class="dd"><code style="font-family:'JetBrains Mono',monospace;font-size:.72rem">nexspence migrate --source https://nexus.example.com --user admin --pass xxx</code></div></div></div>
+        </div>
+        <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">
+          <a href="https://github.com/skensell201/nexspence" target="_blank" rel="noopener" class="btn btn-primary">
+            <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            View on GitHub
+          </a>
+          <a href="#compare" class="btn btn-ghost">See comparison →</a>
+        </div>
+      </div>
+      <div class="rev-r" style="display:flex;flex-direction:column;gap:14px">
+        <div class="cblock">
+          <div class="chdr"><div class="cdot" style="background:#ef4444"></div><div class="cdot" style="background:#f59e0b"></div><div class="cdot" style="background:#22c55e"></div><div class="ctitle">docker-compose.yml</div></div>
+          <div class="cbody"><span class="ck">services</span>:
+  <span class="cn">postgres</span>:
+    <span class="ck">image</span>: <span class="cs">postgres:16-alpine</span>
+    <span class="ck">environment</span>:
+      <span class="cn">POSTGRES_USER</span>: <span class="cs">nexspence</span>
+      <span class="cn">POSTGRES_PASSWORD</span>: <span class="cs">nexspence</span>
+      <span class="cn">POSTGRES_DB</span>: <span class="cs">nexspence</span>
+    <span class="ck">ports</span>: [<span class="cs">"5437:5432"</span>]
+    <span class="ck">volumes</span>: [<span class="cs">postgres_data:/var/lib/postgresql/data</span>]
+
+  <span class="cn">nexspence</span>:
+    <span class="ck">image</span>: <span class="cs">nexspence/nexspence:latest</span>
+    <span class="ck">ports</span>:
+      - <span class="cs">"8081:8081"</span>   <span class="cc"># Web UI &amp; API</span>
+      - <span class="cs">"5000:5000"</span>   <span class="cc"># Docker registry</span>
+    <span class="ck">environment</span>:
+      <span class="cn">NEXSPENCE_DATABASE_DSN</span>: <span class="cs">postgres://nexspence:nexspence@postgres/nexspence</span>
+      <span class="cn">NEXSPENCE_AUTH_JWT_SECRET</span>: <span class="cs">change-me-min-32-chars-long</span>
+      <span class="cn">NEXSPENCE_BOOTSTRAP_ADMIN_PASSWORD</span>: <span class="cs">changeme</span>
+    <span class="ck">depends_on</span>: [<span class="cs">postgres</span>]
+
+<span class="ck">volumes</span>:
+  <span class="cn">postgres_data</span>:</div>
+        </div>
+        <div class="cblock">
+          <div class="chdr"><div class="cdot" style="background:#ef4444"></div><div class="cdot" style="background:#f59e0b"></div><div class="cdot" style="background:#22c55e"></div><div class="ctitle">config.yaml</div></div>
+          <div class="cbody"><span class="ck">http</span>:
+  <span class="cn">addr</span>: <span class="cs">":8081"</span>
+  <span class="cn">base_url</span>: <span class="cs">"http://localhost:8081"</span>
+  <span class="cn">max_body_mb</span>: <span class="cm">1024</span>
+
+<span class="ck">database</span>:
+  <span class="cn">dsn</span>: <span class="cs">"postgres://nexspence:nexspence@localhost:5437/nexspence?sslmode=disable"</span>
+  <span class="cn">max_conns</span>: <span class="cm">100</span>
+
+<span class="ck">storage</span>:
+  <span class="cn">default_type</span>: <span class="cs">"local"</span>
+  <span class="ck">local</span>:
+    <span class="cn">base_path</span>: <span class="cs">"./data/blobs"</span>
+  <span class="cc"># s3:</span>
+  <span class="cc">#   bucket: "nexspence-blobs"</span>
+  <span class="cc">#   endpoint: "http://minio:9000"</span>
+
+<span class="ck">auth</span>:
+  <span class="cn">jwt_secret</span>: <span class="cs">"change-me-min-32-chars-long"</span>
+  <span class="cn">jwt_expiry_hours</span>: <span class="cm">24</span>
+  <span class="cn">token_max_days</span>: <span class="cm">180</span>
+  <span class="cn">anonymous_enabled</span>: <span class="cm">true</span>
+
+<span class="ck">bootstrap</span>:
+  <span class="cn">admin_username</span>: <span class="cs">"admin"</span>
+  <span class="cn">admin_password</span>: <span class="cs">"changeme"</span>   <span class="cc"># change this!</span>
+  <span class="cn">admin_email</span>: <span class="cs">"admin@example.com"</span>
+
+<span class="ck">cleanup</span>:
+  <span class="cn">default_schedule</span>: <span class="cs">"0 */6 * * *"</span>  <span class="cc"># every 6 h</span>
+
+<span class="ck">audit</span>:
+  <span class="cn">retention_days</span>: <span class="cm">90</span>
+
+<span class="cc"># ldap / oidc: disabled by default — see docs</span></div>
+        </div>
+        <div class="cblock">
+          <div class="chdr"><div class="cdot" style="background:#ef4444"></div><div class="cdot" style="background:#f59e0b"></div><div class="cdot" style="background:#22c55e"></div><div class="ctitle">client configs</div></div>
+          <div class="cbody"><span class="cc"># Maven</span>
+<span class="cm">&lt;url&gt;</span><span class="cs">http://localhost:8081/repository/maven-releases</span><span class="cm">&lt;/url&gt;</span>
+
+<span class="cc"># npm</span>
+<span class="cn">npm</span> <span class="ck">config set registry</span> <span class="cs">http://localhost:8081/repository/npm-proxy</span>
+
+<span class="cc"># Docker  (dedicated port 5000)</span>
+<span class="cn">docker</span> <span class="ck">pull</span> <span class="cs">localhost:5000/my-image:latest</span>
+
+<span class="cc"># Helm</span>
+<span class="cn">helm</span> <span class="ck">repo add</span> nx <span class="cs">http://localhost:8081/repository/helm-hosted</span>
+
+<span class="cc"># Go modules</span>
+<span class="cn">GOPROXY</span>=<span class="cs">http://localhost:8081/repository/go-proxy</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="gline"></div>
+
+<!-- ══════════════════════════════ -->
+<!-- ⑥  COMPARE                   -->
+<!-- ══════════════════════════════ -->
+<section id="compare" class="sect" aria-label="Comparison with Nexus">
+  <div class="sect-wrap">
+    <div class="rev" style="text-align:center;margin-bottom:36px">
+      <div class="stag" style="justify-content:center">Comparison</div>
+      <h2 class="stitle">Nexspence vs Nexus OSS</h2>
+      <p class="ssub" style="margin:0 auto">Everything Nexus Pro charges for — included in Nexspence, free forever.</p>
+    </div>
+    <div class="card rev" style="overflow:auto;border-radius:14px;margin-bottom:20px">
+      <table class="ctable" aria-label="Feature comparison">
+        <thead><tr><th style="min-width:200px">Feature</th><th class="thnx" style="min-width:160px">Nexspence</th><th style="min-width:160px">Nexus OSS</th></tr></thead>
+        <tbody>
+          <tr><td>Price</td><td class="y">$0 forever</td><td class="p">Free / $120/mo Pro</td></tr>
+          <tr><td>Nexus REST API v1</td><td class="y">100% compatible</td><td class="y">Native</td></tr>
+          <tr><td>OIDC / SSO</td><td class="y">Keycloak, Google, Entra, Okta</td><td class="n">Pro only</td></tr>
+          <tr><td>LDAP Authentication</td><td class="y">Built-in</td><td class="y">Built-in</td></tr>
+          <tr><td>Docker OCI v2</td><td class="y">Full spec</td><td class="y">Full spec</td></tr>
+          <tr><td>S3 Blob Store</td><td class="y">Any S3-compatible</td><td class="n">Pro only</td></tr>
+          <tr><td>Vulnerability Scanning</td><td class="y">Trivy (built-in)</td><td class="n">Pro add-on</td></tr>
+          <tr><td>Webhooks</td><td class="y">Built-in async</td><td class="n">Pro only</td></tr>
+          <tr><td>Per-repo Export / Import</td><td class="y">Streaming tar.gz</td><td>Admin UI</td></tr>
+          <tr><td>Go Modules (GOPROXY)</td><td class="y">Native</td><td class="n">Community plugin</td></tr>
+          <tr><td>Cargo / Conan</td><td class="y">Native</td><td class="n">Not supported</td></tr>
+          <tr><td>Audit Log NDJSON Export</td><td class="y">Built-in streaming</td><td class="n">Pro feature</td></tr>
+          <tr><td>Component Tagging</td><td class="y">Yes (GIN index)</td><td class="n">Pro only</td></tr>
+          <tr><td>CEL Content Selectors</td><td class="y">Yes</td><td>XPath / Regex</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cta-box rev">
+      <div style="flex:1"><div class="ct">Ready to replace Nexus?</div><div class="cs">One command streams all repos, users, and artifacts. 100% API compatible — zero client changes.</div></div>
+      <a href="https://github.com/skensell201/nexspence" target="_blank" rel="noopener" class="btn btn-primary">
+        <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true" width="16" height="16"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+        Star on GitHub
+      </a>
+      <a href="#deploy" class="btn btn-ghost">Quick Deploy →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ════ FOOTER ════ -->
+<footer class="footer">
+  <div class="footer-logo">
+    <img src="assets/mini_logo.png" alt="Nexspence" width="24" height="24">
+    <span>Nexspence</span>
+  </div>
+  <div class="footer-sub">© 2026 Nexspence Contributors · Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener" style="color:var(--faint);text-decoration:none;border-bottom:1px solid var(--faint);transition:color 180ms" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--faint)'">GNU AGPL v3</a> · All rights reserved</div>
+  <div class="footer-links">
+    <a href="#overview">Overview</a>
+    <a href="#formats">Formats</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#security">Security</a>
+    <a href="#deploy">Deploy</a>
+    <a href="https://github.com/skensell201/nexspence" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</footer>
+
+<script>
+// ── Particles ─────────────────────────────────────────────────
+(function(){
+  const canvas = document.getElementById('particles');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let W, H, pts = [];
+  function resize(){ W = canvas.width = canvas.offsetWidth; H = canvas.height = canvas.offsetHeight; }
+  resize();
+  new ResizeObserver(resize).observe(canvas.parentElement);
+  for(let i=0;i<50;i++) pts.push({x:Math.random(),y:Math.random(),r:Math.random()*1.8+.4,vx:(Math.random()-.5)*.04,vy:-(Math.random()*.06+.01),a:Math.random()*.5+.15,c:['#3b82f6','#8b5cf6','#06b6d4'][Math.floor(Math.random()*3)]});
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    pts.forEach(p=>{
+      ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
+      ctx.fillStyle=p.c+Math.round(p.a*255).toString(16).padStart(2,'0');ctx.fill();
+      p.y-=p.vy*.003;p.x+=p.vx*.003;
+      if(p.y<-.02)p.y=1.02;if(p.x<-.02)p.x=1.02;if(p.x>1.02)p.x=-.02;
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ── Scroll reveal ─────────────────────────────────────────────
+(function(){
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('vis'); io.unobserve(e.target); } });
+  },{threshold:.1,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.rev,.rev-l,.rev-r').forEach(el=>io.observe(el));
+})();
+
+// ── Count-up animation ────────────────────────────────────────
+(function(){
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(!e.isIntersecting) return;
+      const el = e.target;
+      const target = parseInt(el.dataset.count, 10);
+      const duration = 1400;
+      let startTime = null;
+      const step = (ts)=>{
+        if(!startTime) startTime = ts;
+        const p = Math.min((ts - startTime) / duration, 1);
+        const eased = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.round(eased * target);
+        if(p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+      io.unobserve(el);
+    });
+  },{threshold:.6});
+  document.querySelectorAll('[data-count]').forEach(el=>io.observe(el));
+})();
+
+// ── Floating nav highlight on scroll ─────────────────────────
+(function(){
+  const sections = ['overview','formats','architecture','security','deploy','compare'];
+  const pills = {};
+  sections.forEach(id=>{ pills[id] = document.querySelector(`.npill[data-target="${id}"]`); });
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting && pills[e.target.id]){
+        document.querySelectorAll('.npill').forEach(p=>p.classList.remove('active'));
+        pills[e.target.id].classList.add('active');
+      }
+    });
+  },{threshold:.3});
+  sections.forEach(id=>{ const el=document.getElementById(id); if(el) io.observe(el); });
+
+  document.querySelectorAll('.npill[data-target]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const el = document.getElementById(btn.dataset.target);
+      if(el) el.scrollIntoView({behavior:'smooth'});
+    });
+  });
+})();
+</script>
+</body>
+</html>

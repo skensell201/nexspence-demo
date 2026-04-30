@@ -1,0 +1,109 @@
+services:
+
+  # ── PostgreSQL ────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexspence
+      POSTGRES_PASSWORD: nexspence
+      POSTGRES_DB: nexspence
+    ports:
+      - "5432:5432"      # host:container — change host port if 5432 is taken
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexspence"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Nexspence ─────────────────────────────────────────────────
+  nexspence:
+    image: nexspence/nexspence:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8081"      # Web UI & REST API
+      - "5000:5000"      # Docker registry (OCI Distribution v2)
+    environment:
+      NEXSPENCE_DATABASE_DSN: "postgres://nexspence:nexspence@postgres:5432/nexspence?sslmode=disable"
+      NEXSPENCE_HTTP_ADDR: ":8081"
+      NEXSPENCE_HTTP_BASE_URL: "http://localhost:8081"
+      NEXSPENCE_AUTH_JWT_SECRET: "CHANGE_ME_AT_LEAST_32_CHARACTERS_LONG"
+      NEXSPENCE_BOOTSTRAP_ADMIN_PASSWORD: "changeme"   # ← change before exposing externally
+      NEXSPENCE_STORAGE_DEFAULT_TYPE: "local"
+      NEXSPENCE_STORAGE_LOCAL_BASE_PATH: "/data/blobs"
+      NEXSPENCE_LOG_LEVEL: "info"
+      NEXSPENCE_LOG_FORMAT: "json"
+    volumes:
+      - nexspence_blobs:/data/blobs
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/service/rest/v1/status/check"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Keycloak — optional OIDC identity provider ───────────────
+  # Uncomment to get a local Keycloak for SSO/OIDC testing.
+  # Admin UI: http://localhost:8180  (admin / admin)
+  # After starting, create a realm "nexspence", add a client "nexspence"
+  # (confidential, redirect URI: http://localhost:8081/api/v1/auth/oidc/callback),
+  # then enable OIDC in config.yaml:
+  #   oidc.enabled: true
+  #   oidc.issuer: "http://localhost:8180/realms/nexspence"
+  #   oidc.client_id: "nexspence"
+  #   oidc.client_secret: "<your-client-secret>"
+  #
+  # keycloak:
+  #   image: quay.io/keycloak/keycloak:24.0
+  #   command: ["start-dev"]
+  #   restart: unless-stopped
+  #   environment:
+  #     KEYCLOAK_ADMIN: admin
+  #     KEYCLOAK_ADMIN_PASSWORD: admin
+  #     KC_HTTP_PORT: "8080"
+  #     KC_HOSTNAME: "localhost"
+  #     KC_HOSTNAME_PORT: "8180"
+  #     KC_HOSTNAME_STRICT: "false"
+  #     KC_HOSTNAME_STRICT_HTTPS: "false"
+  #     KC_HTTP_ENABLED: "true"
+  #   ports:
+  #     - "8180:8080"
+  #   volumes:
+  #     - keycloak_data:/opt/keycloak/data
+
+  # ── MinIO — optional S3-compatible blob store ─────────────────
+  # Uncomment if you want S3 storage instead of (or alongside) local.
+  # Then in config.yaml set storage.default_type: "s3"
+  # and point a blob store to http://minio:9000 in the UI.
+  #
+  # minio:
+  #   image: minio/minio:latest
+  #   restart: unless-stopped
+  #   command: server /data --console-address ":9001"
+  #   environment:
+  #     MINIO_ROOT_USER: minioadmin
+  #     MINIO_ROOT_PASSWORD: minioadmin
+  #   ports:
+  #     - "9000:9000"      # S3 API
+  #     - "9001:9001"      # MinIO console
+  #   volumes:
+  #     - minio_data:/data
+  #
+  # minio-init:
+  #   image: minio/mc:latest
+  #   depends_on: [minio]
+  #   entrypoint: >
+  #     sh -c "mc alias set local http://minio:9000 minioadmin minioadmin &&
+  #            mc mb --ignore-existing local/nexspence-blobs"
+  #   restart: "no"
+
+volumes:
+  postgres_data:
+  nexspence_blobs:
+  # keycloak_data:
+  # minio_data:

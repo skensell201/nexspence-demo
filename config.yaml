@@ -1,0 +1,127 @@
+# ─────────────────────────────────────────────────────────────
+#  Nexspence — configuration file
+#  All values can be overridden via environment variables:
+#  NEXSPENCE_<SECTION>_<KEY>=value  (uppercase, _ separator)
+#  Example: NEXSPENCE_AUTH_JWT_SECRET=mysecret
+# ─────────────────────────────────────────────────────────────
+
+http:
+  addr: ":8081"
+  read_timeout_sec: 1800
+  write_timeout_sec: 1800
+  max_body_mb: 1024
+  base_url: "http://localhost:8081"   # change to your public hostname in production
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+
+database:
+  dsn: "postgres://nexspence:nexspence@localhost:5437/nexspence?sslmode=disable"
+  max_conns: 100
+  min_conns: 5
+  max_idle_sec: 300
+
+storage:
+  default_type: "local"   # "local" or "s3"
+  local:
+    base_path: "./data/blobs"
+  # s3:
+  #   bucket: "nexspence-blobs"
+  #   region: "us-east-1"
+  #   endpoint: "http://minio:9000"    # MinIO inside Docker Compose
+  #   access_key_id: ""
+  #   secret_access_key: ""
+  #   force_path_style: true            # required for MinIO / non-AWS S3
+
+# ── Authentication ────────────────────────────────────────────
+auth:
+  jwt_secret: "CHANGE_ME_AT_LEAST_32_CHARACTERS_LONG"  # override via env in production
+  jwt_expiry_hours: 24
+  anonymous_enabled: true      # allow read-only access to public repos without login
+  password_min_length: 8
+  bcrypt_cost: 12
+  token_max_days: 180          # maximum lifetime of user API tokens (nxs_*)
+
+# ── Admin bootstrap ───────────────────────────────────────────
+# Applied on every server start — safe to run repeatedly.
+# If the user already exists and the password matches, nothing changes.
+bootstrap:
+  admin_username: "admin"
+  admin_password: "changeme"   # ← CHANGE THIS before exposing publicly
+  admin_email: "admin@example.com"
+  admin_first_name: "Admin"
+
+# ── Logging ───────────────────────────────────────────────────
+log:
+  level: "info"    # debug | info | warn | error
+  format: "json"   # json | text
+
+# ── Search ───────────────────────────────────────────────────
+search:
+  min_query_len: 2
+
+# ── Cleanup policies ─────────────────────────────────────────
+# Default cron schedule used for policies that do not specify their own.
+cleanup:
+  default_schedule: "0 */6 * * *"   # every 6 hours
+
+# ── Audit log ────────────────────────────────────────────────
+# Events live in monthly PostgreSQL partitions.
+# Rotator pre-creates partitions 2 months ahead and drops partitions
+# older than retention_days.
+audit:
+  retention_days: 90
+  soft_cap: 1000000           # warn (no delete) when total rows exceed this
+  rotation_interval: 24h
+  lookahead_months: 2
+
+# ── LDAP / Active Directory (optional) ───────────────────────
+# Set enabled: true to allow AD/LDAP login alongside local accounts.
+# The local admin account always works regardless of LDAP settings.
+ldap:
+  enabled: false
+  host: "ldap.example.com"
+  port: 636                    # 636 for LDAPS, 389 for plain/STARTTLS
+  use_tls: true
+  start_tls: false
+  insecure_skip_verify: false  # set true only for self-signed certs in dev
+  bind_dn: "CN=svc-nexspence,OU=ServiceAccounts,DC=example,DC=com"
+  bind_password: ""            # set via NEXSPENCE_LDAP_BIND_PASSWORD env var
+  search_base: "DC=example,DC=com"
+  search_filter: "(sAMAccountName={0})"   # AD; for OpenLDAP use: (uid={0})
+  user_attributes:
+    email: "mail"
+    first_name: "givenName"
+    last_name: "sn"
+  group_base: "DC=example,DC=com"
+  group_filter: "(member={dn})"
+  group_attribute: "cn"
+  auto_create_users: true
+  admin_group: ""              # group CN whose members get nx-admin role
+  timeout_sec: 10
+
+# ── OIDC / OAuth2 SSO (optional) ─────────────────────────────
+# Supports Keycloak, Google, Microsoft Entra ID, Okta.
+# Coexists with local + LDAP auth.
+oidc:
+  enabled: false
+  display_name: "SSO"          # button label: "Sign in with {display_name}"
+  issuer: ""                   # e.g. "https://kc.example.com/realms/nexspence"
+  client_id: ""
+  client_secret: ""            # set via NEXSPENCE_OIDC_CLIENT_SECRET env var
+  redirect_url: ""             # "https://nexspence.example.com/api/v1/auth/oidc/callback"
+  frontend_base_url: ""        # "https://nexspence.example.com"
+  scopes: ["openid", "profile", "email", "groups"]
+  provisioning: "jit"          # jit | allowlist | manual
+  email_allowlist: []
+  groups_claim: "groups"       # "roles" for Entra app-roles; "" for Google
+  admin_group: ""
+  role_mappings: {}            # e.g. { "developers": "release-manager" }
+  username_claim: "preferred_username"
+  email_claim: "email"
+  name_claim: "name"
+  show_login_button: true
+  cookie_secure: true          # set false for local HTTP dev only
+  cookie_key: ""               # base64(32 random bytes) — set via NEXSPENCE_OIDC_COOKIE_KEY
+  allowed_skew_seconds: 60
