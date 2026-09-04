@@ -123,6 +123,60 @@ func TestPromotionHandler_ListRules_HidesRulesForReposWithoutPrivilege(t *testin
 	}
 }
 
+// A rule names both repositories, so browse on only one side would still leak
+// the other side's name, path filter, and approval gate — e.g. someone with
+// access to "staging" could enumerate the production repos it promotes into.
+func TestPromotionHandler_ListRules_HidesRuleWhenOnlyOneSideIsVisible(t *testing.T) {
+	promoRepo := testutil.NewPromotionRepo()
+	compRepo := testutil.NewComponentRepo()
+	assetRepo := testutil.NewAssetRepo()
+	blobStore := testutil.NewBlobStore()
+	blobRepo := testutil.NewBlobStoreRepo()
+	scanRepo := testutil.NewScanResultRepo()
+	repoRepo := testutil.NewRepoRepo()
+	svc, err := service.NewPromotionService(promoRepo, compRepo, assetRepo, repoRepo, blobRepo, scanRepo, testutil.NewFakeResolver(blobStore))
+	if err != nil {
+		t.Fatalf("NewPromotionService: %v", err)
+	}
+	rbacSvc := service.NewRBACService(emptyRBACRepo{}, repoRepo, zap.NewNop().Sugar(), true)
+	h := handlers.NewPromotionHandler(svc).WithRBAC(repoRepo, rbacSvc)
+
+	if err := repoRepo.Create(testContext(), &domain.Repository{ID: "staging", Name: "staging", Format: domain.FormatRaw, Type: domain.TypeHosted, AllowAnonymous: true}); err != nil {
+		t.Fatalf("seed staging repo: %v", err)
+	}
+	if err := repoRepo.Create(testContext(), &domain.Repository{ID: "production", Name: "production", Format: domain.FormatRaw, Type: domain.TypeHosted, AllowAnonymous: false}); err != nil {
+		t.Fatalf("seed production repo: %v", err)
+	}
+	if err := promoRepo.CreateRule(testContext(), &domain.PromotionRule{
+		Name: "staging-to-prod", FromRepo: "staging", ToRepo: "production",
+	}); err != nil {
+		t.Fatalf("seed rule: %v", err)
+	}
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", "eve")
+		c.Set("roles", []string{"nx-viewer"})
+		c.Next()
+	})
+	r.GET("/api/v1/promotion/rules", h.ListRules)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/promotion/rules", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200 got %d body=%s", w.Code, w.Body.String())
+	}
+	var rules []domain.PromotionRule
+	if err := json.Unmarshal(w.Body.Bytes(), &rules); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if len(rules) != 0 {
+		t.Fatalf("want empty array for a caller who can browse only staging (not production), got %d rules: %+v", len(rules), rules)
+	}
+}
+
 // TestPromotionHandler_CreateRule verifies POST returns 201 with a rule that has an ID.
 func TestPromotionHandler_CreateRule(t *testing.T) {
 	r := buildPromotionRouter(t)

@@ -33,8 +33,12 @@ func (h *PromotionHandler) WithRBAC(repos repository.RepositoryRepo, rbacSvc *se
 	return h
 }
 
-// visibleRules filters rules to ones the caller can browse either FromRepo or
-// ToRepo. Nil-safe: with WithRBAC unset, returns rules unchanged.
+// visibleRules filters rules to ones the caller can browse both FromRepo and
+// ToRepo. A rule names both repositories, so browse on only one side would
+// still leak the other side's name, path filter, and approval gate — e.g.
+// someone with access to a "staging" repo could enumerate the production
+// repositories it promotes into. Nil-safe: with WithRBAC unset, returns rules
+// unchanged.
 func (h *PromotionHandler) visibleRules(c *gin.Context, rules []domain.PromotionRule) []domain.PromotionRule {
 	if h.repos == nil || h.rbacSvc == nil {
 		return rules
@@ -61,7 +65,7 @@ func (h *PromotionHandler) visibleRules(c *gin.Context, rules []domain.Promotion
 
 	visible := make([]domain.PromotionRule, 0, len(rules))
 	for _, r := range rules {
-		if canBrowse(r.FromRepo) || canBrowse(r.ToRepo) {
+		if canBrowse(r.FromRepo) && canBrowse(r.ToRepo) {
 			visible = append(visible, r)
 		}
 	}
