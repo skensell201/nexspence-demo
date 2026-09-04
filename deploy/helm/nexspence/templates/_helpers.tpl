@@ -102,6 +102,9 @@ The bundled DSN intentionally omits the password: the Deployment exposes it
 through PGPASSWORD, which pgx reads without URI encoding or a cluster lookup.
 The username is URL-encoded; urlquery emits "+" for spaces, but pgx treats
 that as a literal plus in URI userinfo, so replace it with "%20".
+When postgresql.enabled=false and
+externalDatabase.existingSecret is set, the DSN is not composed here; the
+Deployment reads it from that Secret instead.
 */}}
 {{- define "nexspence.databaseDSN" -}}
 {{- if .Values.postgresql.enabled }}

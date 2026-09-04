@@ -122,6 +122,13 @@ spec:
                   name: {{ include "nexspence.postgresql.secretName" . }}
                   key: {{ include "nexspence.postgresql.secretPasswordKey" . }}
             {{- end }}
+            {{- if and (not .Values.postgresql.enabled) .Values.externalDatabase.existingSecret }}
+            - name: NEXSPENCE_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalDatabase.existingSecret | quote }}
+                  key: {{ default "dsn" .Values.externalDatabase.existingSecretDsnKey | quote }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "nexspence.fullname" . }}

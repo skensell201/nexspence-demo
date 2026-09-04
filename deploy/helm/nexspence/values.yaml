@@ -256,9 +256,13 @@ postgresql:
   tolerations: []
   affinity: {}
 
-# -- External PostgreSQL DSN (used when postgresql.enabled=false)
+# -- External PostgreSQL (used when postgresql.enabled=false). Prefer
+# existingSecret in production so the DSN is not stored in values.
 externalDatabase:
   dsn: "postgres://nexspence:nexspence@external-postgres:5432/nexspence?sslmode=disable"
+  existingSecret: ""
+  # -- Key inside existingSecret that holds the full postgres:// DSN
+  existingSecretDsnKey: "dsn"
 
 # Image scanning (Trivy).
 #
