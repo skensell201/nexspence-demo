@@ -204,25 +204,57 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# ── PostgreSQL sub-chart (bitnami) ────────────────────────────────────
-# Set enabled: false and provide externalDatabase.dsn for external Postgres.
+# ── Bundled PostgreSQL (official image, single replica) ───────────────
+# Convenience for a first install. Not HA, not replicated, no backups —
+# there is no PodDisruptionBudget on purpose. For production set
+# enabled: false and provide externalDatabase.dsn or
+# externalDatabase.existingSecret (CloudNativePG, RDS, …).
+#
+# Persistence keys live at postgresql.persistence (not the former
+# Bitnami path postgresql.primary.persistence).
 postgresql:
   enabled: true
-  # Bitnami removed the legacy `docker.io/bitnami/*` image tags from Docker Hub
-  # in 2025 (moved to the paid `bitnamisecure` catalog); the archived copies
-  # live under `bitnamilegacy/*`. Pin the bundled subchart image there so a
-  # default install does not hit ImagePullBackOff. Override or run an external
-  # database (postgresql.enabled=false) for production.
   image:
-    repository: bitnamilegacy/postgresql
+    repository: docker.io/library/postgres
+    tag: "18-bookworm"
+    pullPolicy: IfNotPresent
   auth:
     username: nexspence
     password: nexspence
     database: nexspence
-  primary:
-    persistence:
-      enabled: true
-      size: 10Gi
+    # -- Existing Secret with the database password. When set, the chart
+    # does not create a password Secret. The application and PostgreSQL read
+    # the same key at runtime; no cluster lookup is needed during rendering.
+    existingSecret: ""
+    existingSecretPasswordKey: "postgres-password"
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+  # Seconds the app initContainer waits for pg_isready before failing.
+  initTimeoutSeconds: 120
+  # Fast shutdown via preStop; should cover pg_ctl -m fast.
+  terminationGracePeriodSeconds: 60
+  podSecurityContext:
+    fsGroup: 999
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 # -- External PostgreSQL DSN (used when postgresql.enabled=false)
 externalDatabase:

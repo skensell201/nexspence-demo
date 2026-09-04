@@ -16,11 +16,6 @@ keywords:
   - helm
 maintainers:
   - name: nexspence
-dependencies:
-  - name: postgresql
-    version: "15.5.38"
-    repository: "https://charts.bitnami.com/bitnami"
-    condition: postgresql.enabled
 # Links the OCI package (ghcr.io/nexspence/charts/nexspence) back to the repo on GitHub.
 annotations:
   org.opencontainers.image.source: https://github.com/nexspence/nexspence

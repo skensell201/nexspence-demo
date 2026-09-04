@@ -69,6 +69,9 @@ website.zip
 # GoReleaser output
 dist/
 
+# Helm sub-chart cache (this chart has no dependencies)
+deploy/helm/nexspence/charts/
+
 # Release-workflow scratch (written before GoReleaser runs; must not dirty the tree)
 release-assets/
 release-bundle/
