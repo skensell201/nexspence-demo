@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"github.com/nexspence-oss/nexspence/internal/api/handlers"
 	"github.com/nexspence-oss/nexspence/internal/domain"
@@ -64,6 +65,61 @@ func TestPromotionHandler_ListRules_Empty(t *testing.T) {
 	}
 	if len(rules) != 0 {
 		t.Fatalf("want empty array, got %d rules", len(rules))
+	}
+}
+
+// This endpoint sits under the non-admin authed group and, unfiltered,
+// returned every promotion rule's full topology (source repo, target repo,
+// path filter, approval gate) regardless of privilege — ListRules in
+// particular returns all rules system-wide, not scoped to one component.
+func TestPromotionHandler_ListRules_HidesRulesForReposWithoutPrivilege(t *testing.T) {
+	promoRepo := testutil.NewPromotionRepo()
+	compRepo := testutil.NewComponentRepo()
+	assetRepo := testutil.NewAssetRepo()
+	blobStore := testutil.NewBlobStore()
+	blobRepo := testutil.NewBlobStoreRepo()
+	scanRepo := testutil.NewScanResultRepo()
+	repoRepo := testutil.NewRepoRepo()
+	svc, err := service.NewPromotionService(promoRepo, compRepo, assetRepo, repoRepo, blobRepo, scanRepo, testutil.NewFakeResolver(blobStore))
+	if err != nil {
+		t.Fatalf("NewPromotionService: %v", err)
+	}
+	rbacSvc := service.NewRBACService(emptyRBACRepo{}, repoRepo, zap.NewNop().Sugar(), true)
+	h := handlers.NewPromotionHandler(svc).WithRBAC(repoRepo, rbacSvc)
+
+	if err := repoRepo.Create(testContext(), &domain.Repository{ID: "staging", Name: "staging", Format: domain.FormatRaw, Type: domain.TypeHosted, AllowAnonymous: false}); err != nil {
+		t.Fatalf("seed staging repo: %v", err)
+	}
+	if err := repoRepo.Create(testContext(), &domain.Repository{ID: "production", Name: "production", Format: domain.FormatRaw, Type: domain.TypeHosted, AllowAnonymous: false}); err != nil {
+		t.Fatalf("seed production repo: %v", err)
+	}
+	if err := promoRepo.CreateRule(testContext(), &domain.PromotionRule{
+		Name: "staging-to-prod", FromRepo: "staging", ToRepo: "production",
+	}); err != nil {
+		t.Fatalf("seed rule: %v", err)
+	}
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", "eve")
+		c.Set("roles", []string{"nx-viewer"})
+		c.Next()
+	})
+	r.GET("/api/v1/promotion/rules", h.ListRules)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/promotion/rules", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200 got %d body=%s", w.Code, w.Body.String())
+	}
+	var rules []domain.PromotionRule
+	if err := json.Unmarshal(w.Body.Bytes(), &rules); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if len(rules) != 0 {
+		t.Fatalf("want empty array for a caller with no privilege on either repo, got %d rules", len(rules))
 	}
 }
 

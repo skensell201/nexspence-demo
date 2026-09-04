@@ -228,6 +228,69 @@ func TestRawArtifactPushPull(t *testing.T) {
 	delResp.Body.Close()
 }
 
+// SearchAssets/FilterAssets filter what they return through RBAC; the direct
+// GET /service/rest/v1/assets/:id endpoint didn't, letting any authenticated
+// user who knew or enumerated an asset UUID from a private repository read
+// its full metadata and download URL. 404, not 403, keeps the id unguessable.
+func TestAssetGetByID_DeniedWithoutPrivilege(t *testing.T) {
+	admin := login(t, "admin", "admin123")
+
+	createBody := `{"name":"e2e-asset-rbac","online":true,"storage":{"blobStoreName":"default","strictContentTypeValidation":false}}`
+	resp := authReq(t, http.MethodPost, "/service/rest/v1/repositories/raw/hosted", bytes.NewBufferString(createBody), admin)
+	resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	t.Cleanup(func() {
+		d := authReq(t, http.MethodDelete, "/service/rest/v1/repositories/e2e-asset-rbac", nil, admin)
+		d.Body.Close()
+	})
+
+	putReq, _ := http.NewRequest(http.MethodPut,
+		server(t).URL+"/repository/e2e-asset-rbac/secret.bin", bytes.NewReader([]byte("shh")))
+	putReq.Header.Set("Authorization", "Bearer "+admin)
+	putReq.Header.Set("Content-Type", "application/octet-stream")
+	putResp, err := http.DefaultClient.Do(putReq)
+	require.NoError(t, err)
+	putResp.Body.Close()
+	require.Equal(t, http.StatusCreated, putResp.StatusCode)
+
+	searchResp := authReq(t, http.MethodGet, "/service/rest/v1/search/assets?repository=e2e-asset-rbac", nil, admin)
+	defer searchResp.Body.Close()
+	require.Equal(t, http.StatusOK, searchResp.StatusCode)
+	var page struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	require.NoError(t, json.NewDecoder(searchResp.Body).Decode(&page))
+	require.Len(t, page.Items, 1)
+	assetID := page.Items[0].ID
+
+	userBody := `{"userId":"asset-rbac-eve","firstName":"Eve","lastName":"NoPriv","emailAddress":"asset-rbac-eve@example.com","password":"evePass123!","status":"active","roles":[]}`
+	createUserResp := authReq(t, http.MethodPost, "/service/rest/v1/security/users", bytes.NewBufferString(userBody), admin)
+	createUserResp.Body.Close()
+	require.Equal(t, http.StatusCreated, createUserResp.StatusCode)
+	t.Cleanup(func() {
+		d := authReq(t, http.MethodDelete, "/service/rest/v1/security/users/asset-rbac-eve", nil, admin)
+		d.Body.Close()
+	})
+	// Same second-granularity race as the admin setup in server(): a freshly
+	// created user's tokens_valid_after defaults to now(), and logging in
+	// milliseconds later can produce a JWT whose iat reads as pre-cutoff.
+	_, err = pgtest.Pool(t).Exec(context.Background(),
+		`UPDATE users SET tokens_valid_after = now() - interval '1 minute' WHERE username = 'asset-rbac-eve'`)
+	require.NoError(t, err)
+
+	eve := login(t, "asset-rbac-eve", "evePass123!")
+
+	deniedResp := authReq(t, http.MethodGet, "/service/rest/v1/assets/"+assetID, nil, eve)
+	defer deniedResp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, deniedResp.StatusCode)
+
+	allowedResp := authReq(t, http.MethodGet, "/service/rest/v1/assets/"+assetID, nil, admin)
+	defer allowedResp.Body.Close()
+	assert.Equal(t, http.StatusOK, allowedResp.StatusCode)
+}
+
 func TestMetricsEndpoint(t *testing.T) {
 	token := login(t, "admin", "admin123")
 	resp := authReq(t, http.MethodGet, "/api/v1/metrics", nil, token)

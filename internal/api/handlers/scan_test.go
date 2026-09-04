@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/nexspence-oss/nexspence/internal/api/handlers"
 	"github.com/nexspence-oss/nexspence/internal/domain"
@@ -133,6 +134,35 @@ func TestScanHandler_GetScanResult_RepoError_500(t *testing.T) {
 	comps.Err = errors.New("db down")
 	rec := do(t, r, http.MethodGet, "/api/v1/components/any/scan", nil)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
+// Unlike ComponentHandler.Get (#291), this sibling endpoint never checked
+// repository visibility — any authenticated user who knew or enumerated a
+// component UUID from a private repository could read its full vulnerability
+// report. 404, not 403, keeps the id unguessable.
+func TestScanHandler_GetScanResult_DeniedWithoutPrivilege(t *testing.T) {
+	comps := testutil.NewComponentRepo()
+	scanRepo := testutil.NewScanResultRepo()
+	repos := testutil.NewRepoRepo()
+
+	require.NoError(t, repos.Create(testContext(), &domain.Repository{
+		ID: "repo1", Name: "repo1", Format: domain.FormatMaven2, Type: domain.TypeHosted, AllowAnonymous: false,
+	}))
+	svc := service.NewScanService(comps, "http://localhost").WithScanResults(scanRepo)
+	rbacSvc := service.NewRBACService(emptyRBACRepo{}, repos, zap.NewNop().Sugar(), true)
+	h := handlers.NewScanHandler(svc).WithRBAC(comps, repos, rbacSvc)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", "eve")
+		c.Set("roles", []string{"nx-viewer"})
+		c.Next()
+	})
+	r.GET("/api/v1/components/:id/scan", h.GetScanResult)
+
+	c := seedComponent(t, comps, "maven", "pkg", "1.0")
+	rec := do(t, r, http.MethodGet, "/api/v1/components/"+c.ID+"/scan", nil)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
 // ── Summary ────────────────────────────────────────────────────────────────────
