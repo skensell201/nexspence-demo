@@ -35,13 +35,9 @@ Download the `nexspence-run-essentials-vX.Y.Z.zip` from the latest release and e
 
 The Helm chart is at `deploy/helm/nexspence/` inside the extracted directory.
 
-```bash
-# Fetch dependencies (bitnami/postgresql sub-chart)
-cd deploy/helm/nexspence
-helm dependency update
-```
-
-Then install with exactly one of the networking options below.
+Then install with exactly one of the networking options below. The chart
+bundles a single-replica PostgreSQL from the official `postgres` image — no
+sub-chart download is required.
 
 > **JWT secret:** `config.jwtSecret` is optional. When omitted, the chart auto-generates a unique random secret on first install and reuses it across upgrades (via a `lookup` of the existing Secret). The `--set config.jwtSecret=...` in the examples below is only needed to pin a known value or share the secret across clusters.
 
@@ -113,7 +109,10 @@ helm install nexspence \
 
 ## External PostgreSQL
 
-Disable the bundled bitnami sub-chart and provide your own DSN:
+The bundled database is a single-replica convenience instance (official
+`docker.io/library/postgres` image). It is not highly available and ships
+without replication, backups, or a PodDisruptionBudget. For production,
+disable it and point at CloudNativePG, RDS, or another managed Postgres:
 
 ```bash
 helm install nexspence \
@@ -123,6 +122,34 @@ helm install nexspence \
   -f deploy/helm/nexspence/values-examples/nginx.yaml \
   --namespace nexspence \
   --create-namespace
+```
+
+To keep the DSN out of values, put it in a Secret and set
+`externalDatabase.existingSecret` (key `dsn` by default, override with
+`existingSecretDsnKey`). The bundled chart can likewise take
+`postgresql.auth.existingSecret` / `existingSecretPasswordKey` instead of
+`postgresql.auth.password`.
+
+### Rotate the bundled PostgreSQL password
+
+`POSTGRES_PASSWORD` is only applied by the official image while `initdb`
+initializes an empty data directory. Changing `postgresql.auth.password` or
+the referenced Secret later does not change the database role by itself.
+Rotate the role first in the running pod:
+
+```bash
+kubectl exec -it -n nexspence statefulset/nexspence-postgres -- \
+  psql -U nexspence -d postgres
+# In psql, use \password nexspence and enter the new password twice.
+```
+
+Then update `postgresql.auth.password` with `helm upgrade`, or update the key
+in `postgresql.auth.existingSecret`. Helm rolls the application automatically
+for the chart-managed password. After changing an existing Secret, restart it
+explicitly so the environment variable is refreshed:
+
+```bash
+kubectl rollout restart -n nexspence deployment/nexspence
 ```
 
 ---
@@ -292,6 +319,47 @@ helm upgrade nexspence \
 ```
 
 Database migrations run automatically on pod start — no manual step needed.
+
+**Leaving the former Bitnami sub-chart:** this chart no longer depends on
+Bitnami. The bundled database is now a first-party StatefulSet named
+`{release}-postgres` (not `{release}-postgresql`) using
+`docker.io/library/postgres:18`. The Bitnami chart 15.5.38 shipped
+PostgreSQL **16**; this is a two-major jump, so an in-place upgrade of
+`PGDATA` is impossible — use `pg_dump` / `pg_restore`.
+
+A `helm upgrade` of an existing Bitnami install is **not** a valid
+migration path. Helm will not patch the old StatefulSet into the new one
+(the names differ on purpose, so the Bitnami PVC stays around to dump).
+It also will not magically convert the data directory. Do this instead:
+
+1. Dump from the old instance while it is still running:
+
+   ```bash
+   kubectl exec -n nexspence statefulset/nexspence-postgresql -- \
+     pg_dump -U nexspence -Fc nexspence > nexspence.dump
+   ```
+
+2. Uninstall the release, or delete the old Bitnami StatefulSet / Service /
+   Secret. Kubernetes keeps volumeClaimTemplates PVCs when the StatefulSet
+   goes away, so `data-nexspence-postgresql-0` remains as a dump source.
+
+3. Re-install this chart. The new StatefulSet is `nexspence-postgres`
+   (PVC `data-nexspence-postgres-0`). If you previously set Bitnami values
+   under `postgresql.primary.persistence`, move them to
+   `postgresql.persistence` — the schema rejects the unsupported old keys so
+   a storage setting cannot be silently ignored.
+
+4. Restore into the new pod, then let the app start (or restart it if it
+   already ran migrations against an empty cluster):
+
+   ```bash
+   kubectl exec -i -n nexspence statefulset/nexspence-postgres -- \
+     pg_restore -U nexspence -d nexspence --clean --if-exists < nexspence.dump
+   ```
+
+Or skip the bundled database and point `externalDatabase.dsn` (or
+`externalDatabase.existingSecret`) at CloudNativePG / RDS / your existing
+cluster.
 
 **Upgrading to 2.0.0:** the image no longer bundles Trivy. Image scanning
 stops until you set `scanning.enabled: true` (see above); everything else

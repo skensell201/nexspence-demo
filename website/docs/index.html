@@ -550,7 +550,7 @@ docker compose --profile monitoring up -d
 
     <!-- ══ KUBERNETES ══ -->
     <div class="inst-pnl" data-pnl="k8s">
-      <div class="alert-info" style="margin-bottom:16px" data-i18n="inst.k8s.info"><strong>Requirements:</strong> Helm 3.x · Kubernetes ≥ 1.26. Extract the release zip — the chart is at <code>deploy/helm/nexspence/</code>. Run <code>helm dependency update</code> first to fetch the PostgreSQL sub-chart.</div>
+      <div class="alert-info" style="margin-bottom:16px" data-i18n="inst.k8s.info"><strong>Requirements:</strong> Helm 3.x · Kubernetes ≥ 1.26. Extract the release zip — the chart is at <code>deploy/helm/nexspence/</code>.</div>
       <div class="inst-variant-row">
         <button type="button" class="inst-vchip active" onclick="installVariant('k8s','nginx',this)">nginx</button>
         <button type="button" class="inst-vchip" onclick="installVariant('k8s','traefik',this)">Traefik</button>
@@ -561,9 +561,7 @@ docker compose --profile monitoring up -d
 
       <div class="inst-vpnl active" data-vpnl="k8s-nginx">
         <div class="cb"><div class="cb-bar"><span>shell</span><button type="button" class="cb-copy" onclick="copyCode(this)">Copy</button></div>
-        <div class="cb-body">cd deploy/helm/nexspence &amp;&amp; helm dependency update
-
-helm install nexspence deploy/helm/nexspence \
+        <div class="cb-body">helm install nexspence deploy/helm/nexspence \
   -f deploy/helm/nexspence/values-examples/nginx.yaml \
   --set config.jwtSecret="$(openssl rand -hex 32)" \
   --set config.adminPassword="changeme" \
@@ -573,9 +571,7 @@ helm install nexspence deploy/helm/nexspence \
       <div class="inst-vpnl" data-vpnl="k8s-traefik">
         <div class="alert-info" style="background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.2)" data-i18n="inst.traefik.warn"><strong style="color:var(--amber)">Requires</strong> TLS secret <code>nexspence-tls</code> in the namespace.</div>
         <div class="cb"><div class="cb-bar"><span>shell</span><button type="button" class="cb-copy" onclick="copyCode(this)">Copy</button></div>
-        <div class="cb-body">cd deploy/helm/nexspence &amp;&amp; helm dependency update
-
-helm install nexspence deploy/helm/nexspence \
+        <div class="cb-body">helm install nexspence deploy/helm/nexspence \
   -f deploy/helm/nexspence/values-examples/traefik.yaml \
   --set config.jwtSecret="$(openssl rand -hex 32)" \
   --set config.adminPassword="changeme" \
@@ -585,9 +581,7 @@ helm install nexspence deploy/helm/nexspence \
       <div class="inst-vpnl" data-vpnl="k8s-cilium-ing">
         <div class="alert-info" style="background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.2)" data-i18n="inst.cilium-ing.warn"><strong style="color:var(--amber)">Requires</strong> Cilium ≥ 1.12 with ingress controller enabled.</div>
         <div class="cb"><div class="cb-bar"><span>shell</span><button type="button" class="cb-copy" onclick="copyCode(this)">Copy</button></div>
-        <div class="cb-body">cd deploy/helm/nexspence &amp;&amp; helm dependency update
-
-helm install nexspence deploy/helm/nexspence \
+        <div class="cb-body">helm install nexspence deploy/helm/nexspence \
   -f deploy/helm/nexspence/values-examples/cilium-ingress.yaml \
   --set config.jwtSecret="$(openssl rand -hex 32)" \
   --set config.adminPassword="changeme" \
@@ -596,9 +590,7 @@ helm install nexspence deploy/helm/nexspence \
 
       <div class="inst-vpnl" data-vpnl="k8s-istio">
         <div class="cb"><div class="cb-bar"><span>shell</span><button type="button" class="cb-copy" onclick="copyCode(this)">Copy</button></div>
-        <div class="cb-body">cd deploy/helm/nexspence &amp;&amp; helm dependency update
-
-helm install nexspence deploy/helm/nexspence \
+        <div class="cb-body">helm install nexspence deploy/helm/nexspence \
   -f deploy/helm/nexspence/values-examples/istio.yaml \
   --set config.jwtSecret="$(openssl rand -hex 32)" \
   --set config.adminPassword="changeme" \
@@ -608,9 +600,7 @@ helm install nexspence deploy/helm/nexspence \
       <div class="inst-vpnl" data-vpnl="k8s-cilium-gw">
         <div class="alert-info" style="background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.2)" data-i18n="inst.cilium-gw.warn"><strong style="color:var(--amber)">Requires</strong> Cilium ≥ 1.15 + Gateway API CRDs installed.</div>
         <div class="cb"><div class="cb-bar"><span>shell</span><button type="button" class="cb-copy" onclick="copyCode(this)">Copy</button></div>
-        <div class="cb-body">cd deploy/helm/nexspence &amp;&amp; helm dependency update
-
-helm install nexspence deploy/helm/nexspence \
+        <div class="cb-body">helm install nexspence deploy/helm/nexspence \
   -f deploy/helm/nexspence/values-examples/cilium-gateway.yaml \
   --set config.jwtSecret="$(openssl rand -hex 32)" \
   --set config.adminPassword="changeme" \
@@ -2089,7 +2079,7 @@ const TRANSLATIONS={
     'inst.full.s2.desc':'Start the stack once without monitoring, create an <code>nxs_*</code> API token in <strong>Security → API Tokens</strong>, then paste it into <code>deploy/monitoring/prometheus-token</code>.',
     'inst.full.s3.title':'Launch everything',
     'inst.full.s3.desc':'Run the command below. All services start in the correct order.',
-    'inst.k8s.info':'<strong>Requirements:</strong> Helm 3.x · Kubernetes ≥ 1.26. Extract the release zip — the chart is at <code>deploy/helm/nexspence/</code>. Run <code>helm dependency update</code> first.',
+    'inst.k8s.info':'<strong>Requirements:</strong> Helm 3.x · Kubernetes ≥ 1.26. Extract the release zip — the chart is at <code>deploy/helm/nexspence/</code>.',
     'inst.traefik.warn':'<strong style="color:var(--amber)">Requires</strong> TLS secret <code>nexspence-tls</code> in the namespace.',
     'inst.cilium-ing.warn':'<strong style="color:var(--amber)">Requires</strong> Cilium ≥ 1.12 with ingress controller enabled.',
     'inst.cilium-gw.warn':'<strong style="color:var(--amber)">Requires</strong> Cilium ≥ 1.15 + Gateway API CRDs installed.',
@@ -2465,7 +2455,7 @@ const TRANSLATIONS={
     'inst.full.s2.desc':'Запустите стек без мониторинга, создайте токен <code>nxs_*</code> в <strong>Security → API Tokens</strong> и вставьте его в <code>deploy/monitoring/prometheus-token</code>.',
     'inst.full.s3.title':'Запустите всё',
     'inst.full.s3.desc':'Выполните команду ниже. Все сервисы запустятся в правильном порядке.',
-    'inst.k8s.info':'<strong>Требования:</strong> Helm 3.x · Kubernetes ≥ 1.26. Распакуйте архив — chart находится в <code>deploy/helm/nexspence/</code>. Сначала выполните <code>helm dependency update</code>.',
+    'inst.k8s.info':'<strong>Требования:</strong> Helm 3.x · Kubernetes ≥ 1.26. Распакуйте архив — chart находится в <code>deploy/helm/nexspence/</code>.',
     'inst.traefik.warn':'<strong style="color:var(--amber)">Требуется</strong> TLS-секрет <code>nexspence-tls</code> в namespace.',
     'inst.cilium-ing.warn':'<strong style="color:var(--amber)">Требуется</strong> Cilium ≥ 1.12 с включённым ingress controller.',
     'inst.cilium-gw.warn':'<strong style="color:var(--amber)">Требуется</strong> Cilium ≥ 1.15 + установленные Gateway API CRDs.',
