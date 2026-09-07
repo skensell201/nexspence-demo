@@ -202,6 +202,23 @@ func (s *RepositoryService) Update(ctx context.Context, name string, updates *do
 			r.BlobStoreID = &bs.ID
 		}
 	}
+	// Create accepts routingRuleId and Update used to drop it on the floor, so a
+	// routing rule could be attached when the repository was made and never
+	// changed or detached again — the API answered 200 and the UI reported a
+	// saved repository while the row kept whatever it started with. A routing
+	// rule is a BLOCK control, so silently not attaching one is the direction
+	// that matters. Same convention as blobStoreId above: an absent field means
+	// unchanged, an empty string detaches.
+	if updates.RoutingRuleID != nil {
+		id := strings.TrimSpace(*updates.RoutingRuleID)
+		if id == "" {
+			r.RoutingRuleID = nil
+		} else {
+			// Existence is left to the routing_rule_id foreign key, the way
+			// Create already leaves it.
+			r.RoutingRuleID = &id
+		}
+	}
 	r.AllowAnonymous = updates.AllowAnonymous
 
 	if err := s.validateCleanupPolicies(ctx, r.Format, r.CleanupPolicyIDs); err != nil {
