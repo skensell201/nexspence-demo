@@ -389,6 +389,22 @@ browse trees, component and asset listings, artifact downloads, and anonymous
 tokens from the Docker token endpoint. Anonymous writes are never allowed by
 either switch.
 
+### Browsing without signing in
+
+The web UI follows the same two switches. A visitor with no session lands on
+Repositories, Browse and Search rather than a login wall, and sees exactly the
+repositories both switches agree on — an empty list when the instance-wide
+switch is off, or when no repository sets `allow_anonymous`. The sidebar offers
+a Sign in link in place of the user pill, and every other page (Users, Cleanup
+Policies, System Admin, Security, Audit Log) still redirects to `/login`.
+
+The endpoints behind those three pages accept an unauthenticated caller and let
+RBAC decide: repository list and get, the browse trees, component and asset
+reads, and search. A repository the caller may not see answers `404`, not
+`401` or `403`, so its name stays unguessable. Everything else — writes,
+deletes, `/api/v1/me`, tokens, scan results, and the whole admin surface —
+still requires a token.
+
 The Docker `/v2/` handshake itself is unconditional: an unauthenticated ping
 always answers `401` with a `Bearer` challenge pointing at `/v2/token`.
 Clients with credentials trade them there for a user token (this is the

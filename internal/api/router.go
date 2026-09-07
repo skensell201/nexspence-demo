@@ -441,6 +441,16 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 
 	// ── Authenticated endpoints (all valid users) ────────────
 	authed := r.Group("", authMW)
+	// Read endpoints that answer an unauthenticated caller too, marked
+	// publicRead below. Every one of them runs the request through RBACService,
+	// which serves an anonymous caller only for repositories carrying
+	// allow_anonymous, and only while the instance-wide auth.anonymous_enabled
+	// switch is on — so on a closed instance they behave exactly as they did
+	// behind authMW, answering with an empty list or a 404 rather than a 401.
+	// Browsing a public repository without signing in is what Nexus does, and
+	// what the web UI offers on top of this (#404). Writes, deletes and
+	// everything user-scoped stay on authed.
+	publicRead := r.Group("", handlers.OptionalAuth(userSvc, tokenSvc, loginGuard, log))
 	{
 		authed.GET("/service/rest/v1/status", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -455,27 +465,27 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 		authed.PUT("/api/v1/me/change-password", userH.ChangePassword)
 
 		// ── Repositories (read) ───────────────────────────────
-		authed.GET("/service/rest/v1/repositories", repoH.List)
-		authed.GET("/service/rest/v1/repositories/:name", repoH.Get)
-		authed.GET("/api/v1/repositories", repoH.List)
+		publicRead.GET("/service/rest/v1/repositories", repoH.List)
+		publicRead.GET("/service/rest/v1/repositories/:name", repoH.Get)
+		publicRead.GET("/api/v1/repositories", repoH.List)
 		authed.GET("/api/v1/repositories/:name/quota", componentH.GetQuota)
 
 		// ── Browse ────────────────────────────────────────────
-		authed.GET("/api/v1/browse/repositories/:name/docker-tree", browseH.DockerTree)
-		authed.GET("/api/v1/browse/repositories/:name/oci-referrers", browseH.OCIReferrers)
-		authed.GET("/api/v1/browse/repositories/:name/raw-tree", browseH.RawTree)
-		authed.GET("/api/v1/browse/repositories/:name/path-tree", browseH.PathTree)
+		publicRead.GET("/api/v1/browse/repositories/:name/docker-tree", browseH.DockerTree)
+		publicRead.GET("/api/v1/browse/repositories/:name/oci-referrers", browseH.OCIReferrers)
+		publicRead.GET("/api/v1/browse/repositories/:name/raw-tree", browseH.RawTree)
+		publicRead.GET("/api/v1/browse/repositories/:name/path-tree", browseH.PathTree)
 		authed.DELETE("/api/v1/browse/repositories/:name/path", browseH.DeleteByPath)
 		authed.DELETE("/api/v1/browse/repositories/:name/docker-tag", browseH.DeleteDockerTag)
 		authed.DELETE("/api/v1/browse/repositories/:name/docker-image", browseH.DeleteDockerImage)
 
 		// ── Components & Assets (read + search) ───────────────
-		authed.GET("/service/rest/v1/components", componentH.List)
-		authed.GET("/service/rest/v1/components/:id", componentH.Get)
-		authed.GET("/service/rest/v1/assets", func(c *gin.Context) {
+		publicRead.GET("/service/rest/v1/components", componentH.List)
+		publicRead.GET("/service/rest/v1/components/:id", componentH.Get)
+		publicRead.GET("/service/rest/v1/assets", func(c *gin.Context) {
 			componentH.SearchAssets(c)
 		})
-		authed.GET("/service/rest/v1/assets/:id", func(c *gin.Context) {
+		publicRead.GET("/service/rest/v1/assets/:id", func(c *gin.Context) {
 			id := c.Param("id")
 			a, err := assetRepo.Get(c.Request.Context(), id)
 			if errors.Is(err, repository.ErrNotFound) {
@@ -514,9 +524,9 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 		})
 
 		// ── Search ────────────────────────────────────────────
-		authed.GET("/service/rest/v1/search", componentH.Search)
-		authed.GET("/service/rest/v1/search/assets", componentH.SearchAssets)
-		authed.GET("/service/rest/v1/search/assets/download", componentH.SearchAssetsDownload)
+		publicRead.GET("/service/rest/v1/search", componentH.Search)
+		publicRead.GET("/service/rest/v1/search/assets", componentH.SearchAssets)
+		publicRead.GET("/service/rest/v1/search/assets/download", componentH.SearchAssetsDownload)
 
 		// ── Metrics (authenticated) ───────────────────────────
 		authed.GET("/api/v1/metrics", handlers.MetricsHandler(pool))

@@ -3,7 +3,7 @@ import { Outlet, NavLink } from 'react-router-dom'
 import {
   Home, Search, FolderOpen, Trash2,
   Settings, Shield, FileText, LogOut,
-  Key, Plus, X, Copy, Check,
+  Key, LogIn, Plus, X, Copy, Check,
   BookOpen, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -348,6 +348,21 @@ export default function Layout() {
             >
               <LogOut size={11} />
             </button>
+          </div>
+        )}
+        {/* A signed-out visitor browsing public repositories still needs a way
+            in — the pill would otherwise be missing entirely (#404). */}
+        {!user && (
+          <div className={styles.commandBar}>
+            <NavLink to="/login" className={styles.commandBarAvatar} title="Sign in">
+              <LogIn size={13} />
+            </NavLink>
+            <div className={styles.commandBarUser}>
+              <Truncated as="span" className={styles.commandBarUserName} text="Not signed in" />
+            </div>
+            <NavLink to="/login" className={styles.commandBarAction} title="Sign in">
+              <Key size={11} />
+            </NavLink>
           </div>
         )}
         <span className={styles.version}>Nexspence v{systemInfo?.version ?? '…'}</span>
