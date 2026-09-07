@@ -6,8 +6,10 @@ metadata:
   labels:
     {{- include "nexspence.labels" . | nindent 4 }}
 data:
-  # config.httpListen used to map to no config key at all (the real one is
-  # http.addr); NEXSPENCE_HTTP_ADDR is what viper actually reads.
+  # config.httpAddr used to go out as NEXSPENCE_HTTP_LISTEN, which matches no
+  # config key (the real one is http.addr), so the value was inert and the
+  # server stayed on its own :8081 default — the same default the chart ships,
+  # which is why nobody noticed. scripts/check-helm-env.py guards the class.
   NEXSPENCE_HTTP_ADDR: {{ .Values.config.httpAddr | quote }}
   NEXSPENCE_HTTP_BASE_URL: {{ .Values.config.baseURL | quote }}
   {{- if .Values.config.trustedProxies }}

@@ -215,7 +215,8 @@ tracing:
 service:
   type: ClusterIP
   port: 80
-  targetPort: 8081
+  # The container's named port, so the Service follows config.httpAddr too.
+  targetPort: http
   annotations: {}
 
 # ── Ingress (nginx / traefik / cilium ingress-controller) ──────────────
@@ -286,7 +287,8 @@ resources:
 livenessProbe:
   httpGet:
     path: /healthz
-    port: 8081
+    # The container's named port, so the probe follows config.httpAddr.
+    port: http
   initialDelaySeconds: 20
   periodSeconds: 30
   timeoutSeconds: 5
@@ -295,7 +297,7 @@ livenessProbe:
 readinessProbe:
   httpGet:
     path: /readyz
-    port: 8081
+    port: http
   initialDelaySeconds: 10
   periodSeconds: 10
   timeoutSeconds: 3

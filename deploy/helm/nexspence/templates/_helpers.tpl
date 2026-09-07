@@ -107,3 +107,18 @@ Redis mutual-exclusion guard — bundled and external are not both allowed.
 {{- .Values.externalRedis.db }}
 {{- end }}
 {{- end }}
+
+{{/*
+The port the server actually listens on, taken from config.httpAddr
+(":8081", "0.0.0.0:8081"). The containerPort, both probes and the Service
+read it from here, so changing httpAddr moves all of them together instead
+of leaving the pod pointing at a port nothing serves.
+*/}}
+{{- define "nexspence.httpPort" -}}
+{{- $listen := default ":8081" .Values.config.httpAddr -}}
+{{- $port := last (splitList ":" $listen) -}}
+{{- if not (regexMatch "^[0-9]+$" $port) -}}
+{{- fail (printf "config.httpAddr %q has no port; expected something like \":8081\"" $listen) -}}
+{{- end -}}
+{{- $port -}}
+{{- end }}
