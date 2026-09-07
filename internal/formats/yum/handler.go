@@ -57,7 +57,7 @@ func (h *Handler) ServeHTTP(c *gin.Context) {
 		if strings.Contains(p, "/repodata/") {
 			maxAge = repoproxy.MetadataMaxAge(repo)
 		}
-		coords := base.Coords{}
+		coords := proxyCoords(p)
 		if err := repoproxy.ServeGET(c, h.deps, repo, p, "", coords, ct, maxAge); err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		}
@@ -198,10 +198,10 @@ func (h *Handler) serveOtherMetadata(c *gin.Context, repoName, p string) {
 	c.Data(http.StatusOK, "application/xml; charset=utf-8", plain)
 }
 
-func (h *Handler) handleUpload(c *gin.Context, repoName, p string) {
-	filename := path.Base(p)
-	// Parse NVR: name-version-release.arch.rpm — the last two dash segments
-	// are version and release ("curl-8.0.0-1.x86_64.rpm" → curl / 8.0.0).
+// rpmCoords parses NVR (name-version-release) coordinates from an RPM
+// filename: name-version-release.arch.rpm — the last two dash segments are
+// version and release ("curl-8.0.0-1.x86_64.rpm" → curl / 8.0.0).
+func rpmCoords(filename string) base.Coords {
 	name := strings.TrimSuffix(filename, ".rpm")
 	if dot := strings.LastIndex(name, "."); dot > 0 { // strip .arch
 		name = name[:dot]
@@ -214,8 +214,24 @@ func (h *Handler) handleUpload(c *gin.Context, repoName, p string) {
 	} else if len(parts) == 2 {
 		pkgName, version = parts[0], parts[1]
 	}
+	return base.Coords{Name: pkgName, Version: version}
+}
 
-	coords := base.Coords{Name: pkgName, Version: version}
+// proxyCoords derives component coordinates for a proxied path. A cached RPM
+// must carry its real name and version — the OSV/Trivy scan queries by them,
+// so the path-derived fallback name and placeholder version "1" made every
+// RPM pulled through a Yum proxy invisible to vulnerability scanning, the
+// same root cause #336 closed for Cargo. repodata/ holds mutable index files,
+// not versioned packages, and keeps the generic fallback.
+func proxyCoords(p string) base.Coords {
+	if strings.HasSuffix(p, ".rpm") {
+		return rpmCoords(path.Base(p))
+	}
+	return base.Coords{}
+}
+
+func (h *Handler) handleUpload(c *gin.Context, repoName, p string) {
+	coords := rpmCoords(path.Base(p))
 	if _, err := base.StoreArtifact(c.Request.Context(), h.deps,
 		repoName, p, "application/x-rpm",
 		coords, c.Request.Body, c.Request.ContentLength); err != nil {

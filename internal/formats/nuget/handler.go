@@ -65,7 +65,7 @@ func (h *Handler) ServeHTTP(c *gin.Context) {
 		if !strings.HasSuffix(p, ".nupkg") {
 			maxAge = repoproxy.MetadataMaxAge(repo)
 		}
-		coords := base.Coords{}
+		coords := proxyCoords(p)
 		// Resource paths advertised by the rewritten index are the upstream's
 		// own paths re-rooted locally — forward them onto the bare origin,
 		// not onto a possibly /v3-suffixed remote_url (#349).
@@ -162,6 +162,41 @@ func (h *Handler) serveVersionList(c *gin.Context, repoName, pkgID string) {
 		versions = append(versions, comp.Version)
 	}
 	c.JSON(http.StatusOK, gin.H{"versions": versions})
+}
+
+// proxyCoords derives component coordinates for a proxied path. A cached
+// package must carry its real name and version — the OSV/Trivy scan queries
+// by them, so the path-derived fallback name and placeholder version made
+// every package pulled through a NuGet proxy invisible to vulnerability
+// scanning, the same root cause #336 closed for Cargo.
+//
+// A proxy repo forwards whatever local path the client requested straight
+// onto upstream (upstreamPath := origin + p, above) — unlike a hosted repo,
+// it never goes through this file's own "/v3/flatcontainer/" switch-case
+// routes. A real client (nuget.exe, dotnet) requests packages at whatever
+// address the upstream's own index.json/config.json advertised, which for
+// nuget.org and most feeds is "/v3-flatcontainer/" (hyphenated, a sibling of
+// "/v3/", not nested inside it — see TestNuGet_ProxyFlatcontainer_
+// ResolvesAgainstRealShape). Matching on a specific prefix would silently
+// miss that real shape, so this matches by suffix instead: any ".nupkg" path
+// is exactly ":id/:ver/:id.:ver.nupkg" — the same 3-segment split
+// serveFlatContainerDownload already does for hosted downloads, applied to
+// the path's last 3 segments regardless of what comes before them.
+// Registration/index pages are versionless metadata and keep the generic
+// fallback.
+func proxyCoords(p string) base.Coords {
+	if !strings.HasSuffix(p, ".nupkg") {
+		return base.Coords{}
+	}
+	parts := strings.Split(strings.Trim(p, "/"), "/")
+	if len(parts) < 3 {
+		return base.Coords{}
+	}
+	id, ver := parts[len(parts)-3], parts[len(parts)-2]
+	if id == "" || ver == "" {
+		return base.Coords{}
+	}
+	return base.Coords{Name: strings.ToLower(id), Version: ver}
 }
 
 func (h *Handler) serveFlatContainerDownload(c *gin.Context, repoName, p string) {
