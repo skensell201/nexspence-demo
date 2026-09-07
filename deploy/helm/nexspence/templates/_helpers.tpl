@@ -73,3 +73,18 @@ PostgreSQL DSN — either external or bitnami sub-chart.
 {{- .Values.externalDatabase.dsn }}
 {{- end }}
 {{- end }}
+
+{{/*
+The port the server actually listens on, taken from config.httpListen
+(":8081", "0.0.0.0:8081"). The containerPort and both probes read it from
+here, so changing httpListen moves all three together instead of leaving the
+pod pointing at a port nothing serves.
+*/}}
+{{- define "nexspence.httpPort" -}}
+{{- $listen := default ":8081" .Values.config.httpListen -}}
+{{- $port := last (splitList ":" $listen) -}}
+{{- if not (regexMatch "^[0-9]+$" $port) -}}
+{{- fail (printf "config.httpListen %q has no port; expected something like \":8081\"" $listen) -}}
+{{- end -}}
+{{- $port -}}
+{{- end }}

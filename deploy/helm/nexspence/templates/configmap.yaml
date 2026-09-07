@@ -6,7 +6,11 @@ metadata:
   labels:
     {{- include "nexspence.labels" . | nindent 4 }}
 data:
-  NEXSPENCE_HTTP_LISTEN: {{ .Values.config.httpListen | quote }}
+  # storage.s3 aside, this is the third env name the chart got wrong:
+  # the config key is http.addr, so NEXSPENCE_HTTP_LISTEN matched nothing
+  # and config.httpListen was inert — the server simply stayed on its
+  # own :8081 default, which is why nobody noticed.
+  NEXSPENCE_HTTP_ADDR: {{ .Values.config.httpListen | quote }}
   NEXSPENCE_HTTP_BASE_URL: {{ .Values.config.baseURL | quote }}
   NEXSPENCE_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
   NEXSPENCE_LOG_FORMAT: {{ .Values.config.logFormat | quote }}
