@@ -84,6 +84,7 @@ func isAuditablePath(path string) bool {
 		"/service/rest/v1/blobstores",
 		"/service/rest/v1/cleanup-policies",
 		"/api/v1/webhooks",
+		"/api/v1/browse/",
 		"/api/v1/login",
 		"/api/v1/auth/oidc/callback",
 		"/repository/",

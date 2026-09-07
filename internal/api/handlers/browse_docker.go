@@ -303,6 +303,35 @@ func (h *BrowseHandler) assetStore(ctx context.Context, asset *domain.Asset) sto
 	return h.deps.BlobStore
 }
 
+// authorizeDelete loads repoName and checks RBAC "delete" permission on path,
+// denying the same way RBACMiddleware does (401 unauthenticated / 403
+// authenticated-but-forbidden). The browse delete endpoints bypass
+// RBACMiddleware entirely (they sit in the authed-only group), so each one
+// must call this itself before acting. Returns false when the caller must
+// stop — the response has already been written.
+func (h *BrowseHandler) authorizeDelete(c *gin.Context, repoName, path string) bool {
+	ctx := c.Request.Context()
+	repo, err := h.deps.Repos.Get(ctx, repoName)
+	if err != nil || repo == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "repository not found"})
+		return false
+	}
+	userID, _ := c.Get("userID")
+	roles, _ := c.Get("roles")
+	userIDStr, _ := userID.(string)
+	rolesSlice, _ := roles.([]string)
+	ok, err := h.rbac.CanAccessRepo(ctx, userIDStr, rolesSlice, repo, path, "delete")
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "access check failed"})
+		return false
+	}
+	if !ok {
+		denyAccess(c, userIDStr, repoName)
+		return false
+	}
+	return true
+}
+
 // DeleteByPath handles DELETE /api/v1/browse/repositories/:name/path
 // Query param: path=<prefix> (required). Deletes all assets whose path starts with
 // the prefix, then removes orphan components.
@@ -311,6 +340,9 @@ func (h *BrowseHandler) DeleteByPath(c *gin.Context) {
 	pathPrefix := c.Query("path")
 	if pathPrefix == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "path query param required"})
+		return
+	}
+	if !h.authorizeDelete(c, repoName, pathPrefix) {
 		return
 	}
 
@@ -345,10 +377,13 @@ func (h *BrowseHandler) DeleteDockerTag(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-
 	// 1. Load the tag manifest asset and read its content.
 	tagPath := "/manifests/" + imageName + "/" + ref
+	if !h.authorizeDelete(c, repoName, tagPath) {
+		return
+	}
+
+	ctx := c.Request.Context()
 	tagAsset, err := h.deps.Assets.GetByPath(ctx, repoName, tagPath)
 	if err != nil || tagAsset == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "manifest not found"})
@@ -442,6 +477,9 @@ func (h *BrowseHandler) DeleteDockerImage(c *gin.Context) {
 	imageName := strings.Trim(c.Query("image"), "/")
 	if imageName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "image query param required"})
+		return
+	}
+	if !h.authorizeDelete(c, repoName, "/manifests/"+imageName+"/") {
 		return
 	}
 
