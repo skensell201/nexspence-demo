@@ -50,6 +50,22 @@ Alias hostnames are matched case-insensitively, ignoring any port. Point the
 DNS record (or Istio/Ingress route) at Nexspence and pass the original `Host`
 header through, exactly as below — no repository rename needed.
 
+### 1b. Or with the Helm chart
+
+```yaml
+config:
+  docker:
+    subdomainConnector:
+      enabled: true
+      baseDomain: "nexspence.example.com"
+      aliases: {}   # optional, same meaning as above
+```
+
+The chart passes `enabled` and `baseDomain` as environment variables; setting
+any alias makes it mount a small config file, because a YAML map has no
+environment-variable spelling. Remember to add a wildcard host to
+`ingress.hosts` — see the chart README's *Docker Subdomain Connector* section.
+
 ### 2. Wildcard DNS
 
 Add a wildcard DNS A record pointing to your Nexspence server:

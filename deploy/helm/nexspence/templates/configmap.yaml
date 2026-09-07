@@ -17,6 +17,8 @@ data:
   NEXSPENCE_BOOTSTRAP_ADMIN_EMAIL: {{ .Values.config.adminEmail | quote }}
   NEXSPENCE_BOOTSTRAP_ADMIN_FIRST_NAME: {{ .Values.config.adminFirstName | quote }}
   NEXSPENCE_METRICS_PUBLIC: {{ .Values.config.metricsPublic | quote }}
+  NEXSPENCE_DOCKER_SUBDOMAIN_CONNECTOR_ENABLED: {{ .Values.config.docker.subdomainConnector.enabled | quote }}
+  NEXSPENCE_DOCKER_SUBDOMAIN_CONNECTOR_BASE_DOMAIN: {{ .Values.config.docker.subdomainConnector.baseDomain | quote }}
   {{- if eq .Values.storage.type "local" }}
   NEXSPENCE_STORAGE_LOCAL_BASE_PATH: {{ .Values.storage.local.mountPath | quote }}
   {{- else if eq .Values.storage.type "s3" }}
@@ -25,3 +27,25 @@ data:
   NEXSPENCE_STORAGE_S3_REGION: {{ .Values.storage.s3.region | quote }}
   NEXSPENCE_STORAGE_S3_USE_SSL: {{ .Values.storage.s3.useSSL | quote }}
   {{- end }}
+{{- if .Values.config.docker.subdomainConnector.aliases }}
+---
+# A YAML map cannot be an environment variable, so subdomain-connector aliases
+# ride in as a config file mounted over the image's /app/config.yaml. Every
+# other setting still comes from the env above, which viper reads last and so
+# takes precedence over anything in here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nexspence.fullname" . }}-file
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nexspence.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    docker:
+      subdomain_connector:
+        aliases:
+          {{- range $host, $repo := .Values.config.docker.subdomainConnector.aliases }}
+          {{ $host | quote }}: {{ $repo | quote }}
+          {{- end }}
+{{- end }}
