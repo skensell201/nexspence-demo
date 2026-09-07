@@ -15,8 +15,10 @@ import (
 
 	"github.com/nexspence-oss/nexspence/internal/auth"
 	"github.com/nexspence-oss/nexspence/internal/config"
+	"github.com/nexspence-oss/nexspence/internal/logger"
 	"github.com/nexspence-oss/nexspence/internal/redisclient"
 	"github.com/nexspence-oss/nexspence/internal/repository"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 	"github.com/nexspence-oss/nexspence/internal/storage"
 )
 
@@ -37,6 +39,7 @@ type SystemHandler struct {
 	oidc       auth.OIDCAuthenticator // nil when OIDC disabled
 	saml       auth.SAMLAuthenticator // nil when SAML disabled
 	blobStores repository.BlobStoreRepo
+	log        logger.Logger
 }
 
 // NewSystemHandler constructs a SystemHandler from the config, DB pool, and optional LDAP/OIDC authenticators.
@@ -53,6 +56,13 @@ func (h *SystemHandler) WithBlobStores(r repository.BlobStoreRepo) *SystemHandle
 // WithSAML wires the SAML authenticator so it appears in service status; returns the handler for chaining.
 func (h *SystemHandler) WithSAML(s auth.SAMLAuthenticator) *SystemHandler {
 	h.saml = s
+	return h
+}
+
+// WithLogger wires a logger so panics in the parallel service-status checks are
+// recovered and logged instead of crashing the process; returns the handler for chaining.
+func (h *SystemHandler) WithLogger(log logger.Logger) *SystemHandler {
+	h.log = log
 	return h
 }
 
@@ -156,6 +166,10 @@ func (h *SystemHandler) Services(c *gin.Context) {
 		wg.Add(1)
 		go func(idx int, f checkFn) {
 			defer wg.Done()
+			// wg.Wait() below does NOT protect the process from a panic here:
+			// an unrecovered panic in any goroutine crashes the whole program
+			// regardless of whether the parent is waiting on it.
+			defer safego.Recover(h.log, fmt.Sprintf("system-service-check-%d", idx))()
 			results[idx] = f(ctx)
 		}(i, fn)
 	}

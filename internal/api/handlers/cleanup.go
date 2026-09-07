@@ -11,6 +11,7 @@ import (
 	"github.com/nexspence-oss/nexspence/internal/domain"
 	"github.com/nexspence-oss/nexspence/internal/logger"
 	"github.com/nexspence-oss/nexspence/internal/repository"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 )
 
 // cleanupRunner is the minimal interface CleanupHandler needs from CleanupService.
@@ -159,11 +160,11 @@ func (h *CleanupHandler) Run(c *gin.Context) {
 		// The client already has its 202; the log is the only place a
 		// background failure (an unreachable lock backend, a dead DB) can
 		// surface.
-		go func() {
+		safego.Go(h.log, "cleanup-run-all", func() {
 			if err := h.runner.RunAll(context.Background()); err != nil {
 				h.log.Errorw("cleanup: background run of all policies failed", "err", err)
 			}
-		}()
+		})
 		c.JSON(http.StatusAccepted, gin.H{"status": "running all policies"})
 		return
 	}

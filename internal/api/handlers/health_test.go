@@ -19,7 +19,7 @@ func buildHealthRouter(liveness, readiness gin.HandlerFunc) *gin.Engine {
 }
 
 func TestHealthz_AlwaysOK(t *testing.T) {
-	r := buildHealthRouter(handlers.LivenessHandler(), handlers.ReadinessHandler(nil, nil))
+	r := buildHealthRouter(handlers.LivenessHandler(), handlers.ReadinessHandler(nil, nil, nil))
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -34,7 +34,7 @@ func TestHealthz_AlwaysOK(t *testing.T) {
 }
 
 func TestReadyz_NilDeps_OK(t *testing.T) {
-	r := buildHealthRouter(handlers.LivenessHandler(), handlers.ReadinessHandler(nil, nil))
+	r := buildHealthRouter(handlers.LivenessHandler(), handlers.ReadinessHandler(nil, nil, nil))
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

@@ -26,7 +26,7 @@ func mountReplication(t *testing.T) *gin.Engine {
 	t.Helper()
 	repRepo := testutil.NewReplicationRepo()
 	svc := service.NewReplicationService(repRepo, testutil.NewAssetRepo(), testutil.NewBlobStore(), "test-secret", nil, cleanupNopLog())
-	h := handlers.NewReplicationHandler(svc)
+	h := handlers.NewReplicationHandler(svc, nil)
 
 	r := gin.New()
 	r.GET("/api/v1/replication/rules", h.List)
@@ -285,7 +285,7 @@ func TestReplicationHandler_ManualRun_SurvivesRequestCancellation(t *testing.T) 
 	inner := testutil.NewReplicationRepo()
 	repo := &ctxCapturingReplRepo{ReplicationRepo: inner, got: make(chan context.Context, 2)}
 	svc := service.NewReplicationService(repo, testutil.NewAssetRepo(), testutil.NewBlobStore(), "test-secret", nil, cleanupNopLog())
-	h := handlers.NewReplicationHandler(svc)
+	h := handlers.NewReplicationHandler(svc, nil)
 	r := gin.New()
 	r.POST("/api/v1/replication/rules/:id/run", h.ManualRun)
 
@@ -337,7 +337,7 @@ func TestReplicationHandler_ManualRun_ConcurrentRunIs409(t *testing.T) {
 	repo := &blockingReplRepo{ReplicationRepo: inner, blockOn: 2, release: make(chan struct{})}
 	defer close(repo.release)
 	svc := service.NewReplicationService(repo, testutil.NewAssetRepo(), testutil.NewBlobStore(), "test-secret", nil, cleanupNopLog())
-	h := handlers.NewReplicationHandler(svc)
+	h := handlers.NewReplicationHandler(svc, nil)
 	r := gin.New()
 	r.POST("/api/v1/replication/rules/:id/run", h.ManualRun)
 

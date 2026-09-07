@@ -11,7 +11,9 @@ import (
 
 	"github.com/nexspence-oss/nexspence/internal/distlock"
 	"github.com/nexspence-oss/nexspence/internal/domain"
+	"github.com/nexspence-oss/nexspence/internal/logger"
 	"github.com/nexspence-oss/nexspence/internal/repository"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 	"github.com/nexspence-oss/nexspence/internal/storage"
 	"github.com/nexspence-oss/nexspence/internal/tracing"
 )
@@ -30,6 +32,7 @@ type BlobStoreMigrationService struct {
 	blobs      repository.BlobStoreRepo
 	registry   *storage.Registry
 	locker     distlock.Locker
+	log        logger.Logger
 
 	mu      sync.Mutex
 	cancels map[string]context.CancelFunc
@@ -56,6 +59,12 @@ func NewBlobStoreMigrationService(
 // WithLocker sets the distributed locker used to prevent concurrent migrations on the same repo across nodes.
 func (s *BlobStoreMigrationService) WithLocker(l distlock.Locker) *BlobStoreMigrationService {
 	s.locker = l
+	return s
+}
+
+// WithLogger sets the logger used to recover and report a panic in a detached migration run.
+func (s *BlobStoreMigrationService) WithLogger(log logger.Logger) *BlobStoreMigrationService {
+	s.log = log
 	return s
 }
 
@@ -152,7 +161,8 @@ func (s *BlobStoreMigrationService) Start(ctx context.Context, repoName, targetS
 	s.cancels[m.ID] = cancel
 	s.mu.Unlock()
 
-	go s.runMigration(migCtx, m, migLock, deadline) //nolint:gosec // detached context is intentional: background migration must outlive the request
+	//nolint:gosec // detached context is intentional: background migration must outlive the request
+	safego.Go(s.log, "blob-store-migration-run", func() { s.runMigration(migCtx, m, migLock, deadline) })
 	return m, nil
 }
 

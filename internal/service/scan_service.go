@@ -227,7 +227,10 @@ func (s *ScanService) StartScheduler(ctx context.Context, schedule string) {
 	// OSV.dev per component and re-runs Trivy per image, so on a large registry
 	// it can outlast its own interval. Overlapping runs would queue up behind
 	// trivyMu and never catch up.
-	c := cron.New(cron.WithChain(cron.SkipIfStillRunning(cron.DiscardLogger)))
+	// Recover goes first (outermost) so a job panic can't also skip
+	// SkipIfStillRunning's own cleanup — the wrapping wouldn't survive a panic
+	// escaping through it otherwise.
+	c := cron.New(cron.WithChain(cron.Recover(cron.DefaultLogger), cron.SkipIfStillRunning(cron.DiscardLogger)))
 	if _, err := c.AddFunc(schedule, func() {
 		scanned, failed, err := s.BulkScan(ctx, "")
 		if err != nil {

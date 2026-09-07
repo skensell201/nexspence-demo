@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/nexspence-oss/nexspence/internal/logger"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 )
 
 // tokenBucket tracks request allowance for a single identity using a token
@@ -38,7 +41,7 @@ func (b *tokenBucket) allow(rate, burst float64) bool {
 // RateLimitMiddleware returns a Gin middleware that limits requests per
 // authenticated user (keyed by userID, or by remote IP for anonymous calls).
 // rate is tokens/second; burst is the maximum burst size.
-func RateLimitMiddleware(rate, burst float64) gin.HandlerFunc {
+func RateLimitMiddleware(log logger.Logger, rate, burst float64) gin.HandlerFunc {
 	type entry struct {
 		bucket   *tokenBucket
 		lastSeen time.Time
@@ -49,18 +52,21 @@ func RateLimitMiddleware(rate, burst float64) gin.HandlerFunc {
 	)
 
 	// Evict stale entries every 5 minutes to prevent unbounded growth.
-	go func() {
+	safego.Go(log, "ratelimit-bucket-eviction", func() {
 		for range time.Tick(5 * time.Minute) {
-			threshold := time.Now().Add(-10 * time.Minute)
-			mu.Lock()
-			for k, e := range buckets {
-				if e.lastSeen.Before(threshold) {
-					delete(buckets, k)
+			func() {
+				defer safego.Recover(log, "ratelimit-bucket-eviction-tick")()
+				threshold := time.Now().Add(-10 * time.Minute)
+				mu.Lock()
+				defer mu.Unlock()
+				for k, e := range buckets {
+					if e.lastSeen.Before(threshold) {
+						delete(buckets, k)
+					}
 				}
-			}
-			mu.Unlock()
+			}()
 		}
-	}()
+	})
 
 	return func(c *gin.Context) {
 		key := ""

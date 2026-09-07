@@ -29,6 +29,7 @@ import (
 	"github.com/nexspence-oss/nexspence/internal/metrics"
 	"github.com/nexspence-oss/nexspence/internal/repository"
 	"github.com/nexspence-oss/nexspence/internal/repository/postgres"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 	"github.com/nexspence-oss/nexspence/internal/storage"
 	"github.com/nexspence-oss/nexspence/internal/tracing"
 )
@@ -159,7 +160,7 @@ func cmdServe() *cobra.Command {
 			// current month's partition exists before we accept traffic.
 			rotator := audit.NewRotator(audit.NewPgPartitionStore(pool), cfg.Audit, log)
 			rotator.RunOnce(cmd.Context())
-			go rotator.Run(cmd.Context())
+			safego.Go(log, "audit-rotator", func() { rotator.Run(cmd.Context()) })
 			log.Info("audit rotator started",
 				"retention_days", cfg.Audit.RetentionDays,
 				"soft_cap", cfg.Audit.SoftCap,
@@ -195,7 +196,7 @@ func cmdServe() *cobra.Command {
 			// Start background metrics sampler — stops on context cancellation.
 			samplerCtx, cancelSampler := context.WithCancel(cmd.Context())
 			defer cancelSampler()
-			metrics.StartSampler(samplerCtx, pool)
+			metrics.StartSampler(samplerCtx, log, pool)
 
 			// Lifetime of everything the router runs in the background. Kept
 			// separate from the HTTP server's shutdown context so the two can be

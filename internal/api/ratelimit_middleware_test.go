@@ -12,7 +12,7 @@ import (
 func TestRateLimitMiddleware_BlocksOverBurst(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(RateLimitMiddleware(0.0001, 2))
+	r.Use(RateLimitMiddleware(nil, 0.0001, 2))
 	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
 	codes := []int{}
 	for i := 0; i < 3; i++ {
@@ -30,7 +30,7 @@ func TestRateLimitMiddleware_BlocksOverBurst(t *testing.T) {
 func TestRateLimitMiddleware_RetryAfterIsNumeric(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(RateLimitMiddleware(0.0001, 1))
+	r.Use(RateLimitMiddleware(nil, 0.0001, 1))
 	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
 	var throttled *httptest.ResponseRecorder
 	for i := 0; i < 2; i++ {

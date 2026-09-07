@@ -248,7 +248,10 @@ func (s *BlobGCService) StartCronScheduler(ctx context.Context, schedule string,
 		s.log().Info("blob gc scheduler disabled: empty schedule")
 		return
 	}
-	c := cron.New()
+	// cron.Recover: without it, a panic inside CompactAll runs on cron's own
+	// internal scheduler goroutine and crashes the whole process — not
+	// covered by the safego.Go wrapping the outer StartCronScheduler call.
+	c := cron.New(cron.WithChain(cron.Recover(cron.DefaultLogger)))
 	_, err := c.AddFunc(schedule, func() {
 		if _, err := s.CompactAll(context.Background(), GCOptions{MinAge: minAge}); err != nil {
 			s.log().Error("blob gc cron error", "err", err)

@@ -7,12 +7,14 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/nexspence-oss/nexspence/internal/domain"
+	"github.com/nexspence-oss/nexspence/internal/logger"
 	"github.com/nexspence-oss/nexspence/internal/repository"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 )
 
 // AuditMiddleware writes an audit event after each mutating request completes.
 // It only records PUT/POST/DELETE/PATCH on key management paths.
-func AuditMiddleware(auditRepo repository.AuditRepo) gin.HandlerFunc {
+func AuditMiddleware(log logger.Logger, auditRepo repository.AuditRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next() // run handler first
 
@@ -70,7 +72,7 @@ func AuditMiddleware(auditRepo repository.AuditRepo) gin.HandlerFunc {
 			Context:    ctxData,
 			Result:     result,
 		}
-		go func() { _ = auditRepo.Write(context.Background(), e) }()
+		safego.Go(log, "audit-write", func() { _ = auditRepo.Write(context.Background(), e) })
 	}
 }
 

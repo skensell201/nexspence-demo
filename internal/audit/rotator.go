@@ -7,6 +7,7 @@ import (
 	"github.com/nexspence-oss/nexspence/internal/config"
 	"github.com/nexspence-oss/nexspence/internal/logger"
 	"github.com/nexspence-oss/nexspence/internal/metrics"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 )
 
 // Rotator runs partition lifecycle for audit_events on a ticker.
@@ -37,7 +38,10 @@ func (r *Rotator) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			r.tick(ctx)
+			func() {
+				defer safego.Recover(r.log, "audit-rotator-tick")()
+				r.tick(ctx)
+			}()
 		}
 	}
 }

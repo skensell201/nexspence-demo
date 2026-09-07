@@ -9,7 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/nexspence-oss/nexspence/internal/logger"
 	"github.com/nexspence-oss/nexspence/internal/redisclient"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 )
 
 // readinessTTL is how long a healthy probe result is reused. /readyz is
@@ -34,7 +36,7 @@ type pinger interface {
 // ReadinessHandler checks DB and Redis connectivity in parallel.
 // Either dep may be nil — it is skipped in that case.
 // Returns 503 if any check fails.
-func ReadinessHandler(pool *pgxpool.Pool, redis *redisclient.Client) gin.HandlerFunc {
+func ReadinessHandler(log logger.Logger, pool *pgxpool.Pool, redis *redisclient.Client) gin.HandlerFunc {
 	// Typed nils would satisfy the interface while being nil underneath, so
 	// convert explicitly.
 	var db, rd pinger
@@ -44,7 +46,7 @@ func ReadinessHandler(pool *pgxpool.Pool, redis *redisclient.Client) gin.Handler
 	if redis != nil {
 		rd = redis
 	}
-	return readinessHandler(db, rd, readinessTTL)
+	return readinessHandler(log, db, rd, readinessTTL)
 }
 
 // readinessResult is the memoized outcome of one probe round.
@@ -54,7 +56,7 @@ type readinessResult struct {
 	at     time.Time
 }
 
-func readinessHandler(db, redis pinger, ttl time.Duration) gin.HandlerFunc {
+func readinessHandler(log logger.Logger, db, redis pinger, ttl time.Duration) gin.HandlerFunc {
 	var (
 		mu     sync.Mutex
 		cached *readinessResult
@@ -66,20 +68,32 @@ func readinessHandler(db, redis pinger, ttl time.Duration) gin.HandlerFunc {
 		var wg sync.WaitGroup
 		failed := false
 
+		// wg.Wait() below does NOT protect the process from a panic in check:
+		// an unrecovered panic in any goroutine crashes the whole program
+		// regardless of whether the parent is waiting on it.
 		check := func(name string, p pinger) {
 			defer wg.Done()
+			defer safego.Recover(log, "readiness-check-"+name)()
 			pctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
-			status := "ok"
-			if err := p.Ping(pctx); err != nil {
-				status = "error"
+			// status starts pessimistic and is recorded from a defer registered
+			// after cancel(): defers run LIFO, so this one fires before
+			// safego.Recover's above, capturing whatever status was at the
+			// moment of a panic instead of letting Recover swallow it silently
+			// and leaving the check missing from checks (which would drop it
+			// out of the response and never flip failed).
+			status := "error"
+			defer func() {
+				cmu.Lock()
+				checks[name] = status
+				if status != "ok" {
+					failed = true
+				}
+				cmu.Unlock()
+			}()
+			if err := p.Ping(pctx); err == nil {
+				status = "ok"
 			}
-			cmu.Lock()
-			checks[name] = status
-			if status != "ok" {
-				failed = true
-			}
-			cmu.Unlock()
 		}
 
 		if db != nil {

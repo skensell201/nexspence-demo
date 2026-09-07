@@ -36,7 +36,7 @@ func serveReady(h gin.HandlerFunc) *httptest.ResponseRecorder {
 // trip, which turns the liveness surface into a cheap way to load the DB.
 func TestReadiness_CachesTheProbeResult(t *testing.T) {
 	db := &countingPinger{}
-	h := readinessHandler(db, nil, time.Minute)
+	h := readinessHandler(nil, db, nil, time.Minute)
 
 	for range 20 {
 		require.Equal(t, http.StatusOK, serveReady(h).Code)
@@ -46,7 +46,7 @@ func TestReadiness_CachesTheProbeResult(t *testing.T) {
 
 func TestReadiness_CacheExpires(t *testing.T) {
 	db := &countingPinger{}
-	h := readinessHandler(db, nil, time.Nanosecond)
+	h := readinessHandler(nil, db, nil, time.Nanosecond)
 
 	serveReady(h)
 	time.Sleep(time.Millisecond)
@@ -57,7 +57,7 @@ func TestReadiness_CacheExpires(t *testing.T) {
 
 func TestReadiness_ReportsFailure(t *testing.T) {
 	db := &countingPinger{err: errors.New("connection refused")}
-	h := readinessHandler(db, nil, time.Minute)
+	h := readinessHandler(nil, db, nil, time.Minute)
 
 	w := serveReady(h)
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
@@ -68,7 +68,7 @@ func TestReadiness_ReportsFailure(t *testing.T) {
 // keeps reporting an outage that is already over.
 func TestReadiness_FailureIsNotCached(t *testing.T) {
 	db := &countingPinger{err: errors.New("connection refused")}
-	h := readinessHandler(db, nil, time.Minute)
+	h := readinessHandler(nil, db, nil, time.Minute)
 
 	serveReady(h)
 	db.err = nil
@@ -81,7 +81,7 @@ func TestReadiness_FailureIsNotCached(t *testing.T) {
 func TestReadiness_ChecksBothDependencies(t *testing.T) {
 	db := &countingPinger{}
 	redis := &countingPinger{}
-	h := readinessHandler(db, redis, time.Minute)
+	h := readinessHandler(nil, db, redis, time.Minute)
 
 	w := serveReady(h)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -90,6 +90,22 @@ func TestReadiness_ChecksBothDependencies(t *testing.T) {
 }
 
 func TestReadiness_NoDependencies_IsOK(t *testing.T) {
-	w := serveReady(readinessHandler(nil, nil, time.Minute))
+	w := serveReady(readinessHandler(nil, nil, nil, time.Minute))
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+type panickingPinger struct{}
+
+func (panickingPinger) Ping(context.Context) error { panic("boom") }
+
+// safego.Recover stops a panicking Ping from crashing the process, but the
+// check's own result must still land in checks as "error" (and flip failed),
+// not be silently dropped — a dropped check would leave /readyz reporting 200
+// "ok" for a dependency that just panicked.
+func TestReadiness_PanickingDependencyReportsFailure(t *testing.T) {
+	h := readinessHandler(nil, panickingPinger{}, nil, time.Minute)
+
+	w := serveReady(h)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Contains(t, w.Body.String(), `"db":"error"`)
 }

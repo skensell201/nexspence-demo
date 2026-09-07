@@ -26,6 +26,7 @@ import (
 	"github.com/nexspence-oss/nexspence/internal/netguard"
 	"github.com/nexspence-oss/nexspence/internal/nexusclient"
 	"github.com/nexspence-oss/nexspence/internal/repository"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 	"github.com/nexspence-oss/nexspence/internal/tracing"
 )
 
@@ -310,7 +311,7 @@ func (s *NexusMigrationService) launch(id string) {
 	s.dones[id] = make(chan struct{})
 	s.mu.Unlock()
 
-	go s.run(ctx, id)
+	safego.Go(s.log, "nexus-migration-run", func() { s.run(ctx, id) })
 }
 
 // ── preview ─────────────────────────────────────────────────────────────────

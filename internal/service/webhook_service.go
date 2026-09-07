@@ -12,14 +12,17 @@ import (
 	"time"
 
 	"github.com/nexspence-oss/nexspence/internal/domain"
+	"github.com/nexspence-oss/nexspence/internal/logger"
 	"github.com/nexspence-oss/nexspence/internal/netguard"
 	"github.com/nexspence-oss/nexspence/internal/repository"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 )
 
 // WebhookService handles CRUD for webhooks and fires delivery goroutines.
 type WebhookService struct {
 	repo   repository.WebhookRepo
 	client *http.Client
+	log    logger.Logger
 }
 
 // NewWebhookService constructs a service for managing and delivering webhooks.
@@ -30,6 +33,12 @@ func NewWebhookService(repo repository.WebhookRepo) *WebhookService {
 		repo:   repo,
 		client: netguard.Client(10 * time.Second),
 	}
+}
+
+// WithLogger sets the logger used to recover and report a panic in a detached webhook delivery.
+func (s *WebhookService) WithLogger(log logger.Logger) *WebhookService {
+	s.log = log
+	return s
 }
 
 // WithHTTPClient overrides the delivery HTTP client. Intended for tests that
@@ -124,7 +133,7 @@ func (s *WebhookService) Test(ctx context.Context, id string) (*TestResult, erro
 // Dispatch fires the payload to all active webhooks subscribed to payload.Event.
 // Delivery is asynchronous — errors are silently dropped.
 func (s *WebhookService) Dispatch(payload domain.WebhookPayload) {
-	go func() {
+	safego.Go(s.log, "webhook-dispatch", func() {
 		hooks, err := s.repo.ListByEvent(context.Background(), payload.Event)
 		if err != nil || len(hooks) == 0 {
 			return
@@ -139,7 +148,7 @@ func (s *WebhookService) Dispatch(payload domain.WebhookPayload) {
 			}
 			s.deliver(wh, body, payload.Event)
 		}
-	}()
+	})
 }
 
 func (s *WebhookService) deliver(wh domain.Webhook, body []byte, event domain.WebhookEvent) {

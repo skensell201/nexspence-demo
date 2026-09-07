@@ -101,7 +101,11 @@ func (s *CleanupService) storeForAsset(ctx context.Context, a *domain.Asset) sto
 func (s *CleanupService) StartCronScheduler(ctx context.Context, defaultSchedule string) {
 	s.mu.Lock()
 	s.defaultSchedule = defaultSchedule
-	s.cronScheduler = cron.New()
+	// cron.Recover: a job panic (e.g. an unexpected shape from a bad policy
+	// row) would otherwise crash the whole process — cron's own internal
+	// scheduler goroutine invokes registered jobs directly, so this is not
+	// covered by the safego.Go wrapping the outer StartCronScheduler call.
+	s.cronScheduler = cron.New(cron.WithChain(cron.Recover(cron.DefaultLogger)))
 	s.mu.Unlock()
 
 	policies, err := s.policies.List(ctx)

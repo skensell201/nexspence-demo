@@ -9,18 +9,21 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/nexspence-oss/nexspence/internal/domain"
+	"github.com/nexspence-oss/nexspence/internal/logger"
 	"github.com/nexspence-oss/nexspence/internal/repository"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 	"github.com/nexspence-oss/nexspence/internal/service"
 )
 
 // ReplicationHandler serves the content-replication REST endpoints.
 type ReplicationHandler struct {
 	svc *service.ReplicationService
+	log logger.Logger
 }
 
 // NewReplicationHandler constructs a ReplicationHandler backed by the given replication service.
-func NewReplicationHandler(svc *service.ReplicationService) *ReplicationHandler {
-	return &ReplicationHandler{svc: svc}
+func NewReplicationHandler(svc *service.ReplicationService, log logger.Logger) *ReplicationHandler {
+	return &ReplicationHandler{svc: svc, log: log}
 }
 
 // List handles GET /api/v1/replication/rules
@@ -95,7 +98,7 @@ func (h *ReplicationHandler) Create(c *gin.Context) {
 	// cancels it the moment this handler returns, which silently killed the
 	// (re)scheduling this goroutine exists to perform — the API answered as if
 	// the rule was scheduled while its cron entry never materialized (#254).
-	go h.svc.ReloadRule(context.Background(), rule.ID)
+	safego.Go(h.log, "replication-reload-rule", func() { h.svc.ReloadRule(context.Background(), rule.ID) })
 	c.JSON(http.StatusCreated, rule)
 }
 
@@ -124,7 +127,7 @@ func (h *ReplicationHandler) Update(c *gin.Context) {
 		return
 	}
 	// Detached for the same reason as Create's — see the comment there (#254).
-	go h.svc.ReloadRule(context.Background(), rule.ID)
+	safego.Go(h.log, "replication-reload-rule", func() { h.svc.ReloadRule(context.Background(), rule.ID) })
 	c.JSON(http.StatusOK, rule)
 }
 
@@ -159,9 +162,9 @@ func (h *ReplicationHandler) ManualRun(c *gin.Context) {
 	// Detached: a run outlives its 202 by design, and the request context is
 	// canceled the moment the handler returns — the run would abort almost
 	// immediately with no visible error (#254).
-	go func() {
+	safego.Go(h.log, "replication-manual-run", func() {
 		_ = h.svc.RunRule(context.Background(), id)
-	}()
+	})
 	c.JSON(http.StatusAccepted, gin.H{"message": "replication started"})
 }
 

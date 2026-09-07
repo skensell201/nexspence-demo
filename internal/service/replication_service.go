@@ -238,7 +238,10 @@ func (s *ReplicationService) ReEncryptCredentials(ctx context.Context) int {
 // StartCronScheduler loads all enabled rules and registers cron jobs. Run as a goroutine.
 func (s *ReplicationService) StartCronScheduler(ctx context.Context) {
 	s.mu.Lock()
-	s.cronScheduler = cron.New()
+	// cron.Recover: a job panic runs on cron's own internal scheduler
+	// goroutine and would otherwise crash the whole process — not covered by
+	// the safego.Go wrapping the outer StartCronScheduler call.
+	s.cronScheduler = cron.New(cron.WithChain(cron.Recover(cron.DefaultLogger)))
 	s.mu.Unlock()
 
 	rules, err := s.repo.ListRules(ctx)

@@ -45,6 +45,7 @@ import (
 	"github.com/nexspence-oss/nexspence/internal/repository"
 	"github.com/nexspence-oss/nexspence/internal/repository/postgres"
 	"github.com/nexspence-oss/nexspence/internal/requestctx"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 	"github.com/nexspence-oss/nexspence/internal/service"
 	"github.com/nexspence-oss/nexspence/internal/storage"
 )
@@ -169,7 +170,7 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 	}
 
 	tokenSvc := service.NewTokenService(userTokenRepo, userRepo)
-	webhookSvc := service.NewWebhookService(webhookRepo)
+	webhookSvc := service.NewWebhookService(webhookRepo).WithLogger(log)
 	repoSvc.WithWebhooks(webhookSvc)
 	cleanupSvc := service.NewCleanupService(cleanupRepo, repoRepo, assetRepo, blobRepo, localBlob, log)
 	cleanupSvc.WithLocker(locker)
@@ -180,7 +181,7 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 	cleanupSvc.WithComponents(componentRepo)
 
 	// Start per-policy cron scheduler in background (default: cfg.Cleanup.DefaultSchedule).
-	go cleanupSvc.StartCronScheduler(ctx, cfg.Cleanup.DefaultSchedule)
+	safego.Go(log, "cleanup-cron-scheduler", func() { cleanupSvc.StartCronScheduler(ctx, cfg.Cleanup.DefaultSchedule) })
 
 	gcSvc := &service.BlobGCService{
 		Assets:        assetRepo,
@@ -191,14 +192,14 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 		DefaultMinAge: cfg.GC.MinAge,
 	}
 	if cfg.GC.Enabled {
-		go gcSvc.StartCronScheduler(ctx, cfg.GC.Schedule, cfg.GC.MinAge)
+		safego.Go(log, "gc-cron-scheduler", func() { gcSvc.StartCronScheduler(ctx, cfg.GC.Schedule, cfg.GC.MinAge) })
 	}
 
 	replSvc := service.NewReplicationService(replRepo, assetRepo, localBlob, cfg.Auth.JWTSecret, cfg.Auth.EncryptionKeyBytes(), log)
 	// Read each asset from its own physical store, so replication keeps working
 	// once a repository is pointed at S3 or a second local store.
 	replSvc.WithResolver(blobRepo, blobRegistry)
-	go replSvc.StartCronScheduler(ctx)
+	safego.Go(log, "replication-cron-scheduler", func() { replSvc.StartCronScheduler(ctx) })
 
 	promotionSvc, err := service.NewPromotionService(
 		promotionRepo, componentRepo, assetRepo, repoRepo, blobRepo, scanRepo, blobRegistry,
@@ -210,7 +211,7 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 
 	// Debounced download counter: in-memory aggregation, periodic batched flush.
 	dlCounter := service.NewDownloadCounter(assetRepo, log)
-	go dlCounter.Start(ctx, 10*time.Second)
+	safego.Go(log, "download-counter", func() { dlCounter.Start(ctx, 10*time.Second) })
 
 	// ── Format handlers ───────────────────────────────────────
 	// Built before the format handlers because they take Deps by value: a
@@ -245,7 +246,7 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 	var scanTrigger formats.ScanTrigger
 	if cfg.Scan.Enabled {
 		scanTrigger = scanSvc
-		go scanSvc.StartScheduler(ctx, cfg.Scan.Schedule)
+		safego.Go(log, "scan-cron-scheduler", func() { scanSvc.StartScheduler(ctx, cfg.Scan.Schedule) })
 	}
 
 	formatDeps := formats.Deps{
@@ -306,7 +307,7 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 	scanH := handlers.NewScanHandler(scanSvc)
 	tokenH := handlers.NewTokenHandler(tokenSvc, userSvc, cfg.Auth.TokenMaxDays)
 	webhookH := handlers.NewWebhookHandler(webhookSvc)
-	replH := handlers.NewReplicationHandler(replSvc)
+	replH := handlers.NewReplicationHandler(replSvc, log)
 	promotionH := handlers.NewPromotionHandler(promotionSvc)
 	roleH := handlers.NewRoleHandler(roleRepo, userRepo)
 	privH := handlers.NewPrivilegeHandler(privilegeRepo, roleRepo)
@@ -314,7 +315,7 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 	accessGraphH := handlers.NewAccessGraphHandler(userRepo, roleRepo, privilegeRepo, csRepo)
 	rrSvc := service.NewRoutingRuleService(rrRepo)
 	rrH := handlers.NewRoutingRuleHandler(rrSvc)
-	systemH := handlers.NewSystemHandler(cfg, pool, ldapSvc, oidcSvc).WithBlobStores(blobRepo).WithSAML(samlSvc)
+	systemH := handlers.NewSystemHandler(cfg, pool, ldapSvc, oidcSvc).WithBlobStores(blobRepo).WithSAML(samlSvc).WithLogger(log)
 	nexusMigSvc := service.NewNexusMigrationService(service.NexusMigrationConfig{
 		Jobs:          migrationRepo,
 		Repos:         repoSvc,
@@ -331,19 +332,19 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 	// Re-attach to migrations interrupted by a restart. Without this a job left
 	// running when the process stopped sits in "running" with nothing behind it —
 	// which is exactly how a migration used to look even on a healthy server.
-	go func() { _ = nexusMigSvc.ResumeAll(ctx) }()
+	safego.Go(log, "nexus-migration-resume-all", func() { _ = nexusMigSvc.ResumeAll(ctx) })
 	migrationH := handlers.NewMigrationHandler(migrationRepo, nexusMigSvc)
 	ldapH := handlers.NewLDAPHandler(cfg.LDAP, ldapSvc)
 	tasksH := handlers.NewTasksHandler(cleanupTaskAdapter{repo: cleanupRepo, svc: cleanupSvc}, replSvc)
 	blobMigrationRepo := postgres.NewBlobStoreMigrationRepo(pool)
-	blobMigSvc := service.NewBlobStoreMigrationService(blobMigrationRepo, assetRepo, repoRepo, blobRepo, blobRegistry)
+	blobMigSvc := service.NewBlobStoreMigrationService(blobMigrationRepo, assetRepo, repoRepo, blobRepo, blobRegistry).WithLogger(log)
 	blobMigSvc.WithLocker(locker)
 	blobMigH := handlers.NewBlobStoreMigrationHandler(blobMigSvc)
 
 	// Resume any migrations that were interrupted by a server restart — on the
 	// background context, so a shutdown mid-resume interrupts it the same way
 	// the restart that left it unfinished did.
-	go func() { _ = blobMigSvc.ResumeAll(ctx) }()
+	safego.Go(log, "blob-migration-resume-all", func() { _ = blobMigSvc.ResumeAll(ctx) })
 	backupSvc := &service.BackupService{
 		BlobStores: blobRepo,
 		Repos:      repoRepo,
@@ -388,15 +389,15 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 		// post-Next summary can still see them (#321).
 		r.Use(traceLogStash())
 	}
-	r.Use(AuditMiddleware(auditRepo))
+	r.Use(AuditMiddleware(log, auditRepo))
 	if cfg.Auth.RateLimitEnabled {
-		r.Use(RateLimitMiddleware(cfg.Auth.RateLimitRPS, cfg.Auth.RateLimitBurst))
+		r.Use(RateLimitMiddleware(log, cfg.Auth.RateLimitRPS, cfg.Auth.RateLimitBurst))
 	}
 
 	// Health probes: no auth, but inside the middleware chain — registering them
 	// earlier meant gin snapshotted an empty chain for them, leaving the
 	// readiness path without Recovery.
-	registerHealthRoutes(r, handlers.LivenessHandler(), handlers.ReadinessHandler(pool, rdb))
+	registerHealthRoutes(r, handlers.LivenessHandler(), handlers.ReadinessHandler(log, pool, rdb))
 
 	authMW := handlers.AuthMiddleware(userSvc, tokenSvc, loginGuard, log)
 	adminMW := handlers.AdminRequired()

@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/nexspence-oss/nexspence/internal/logger"
+	"github.com/nexspence-oss/nexspence/internal/safego"
 )
 
 const ringSize = 360 // 1 hour at 10-second intervals
@@ -61,19 +64,22 @@ var History = &RingBuffer{}
 
 // StartSampler starts a background goroutine that samples metrics every 10s
 // and stops when ctx is canceled.
-func StartSampler(ctx context.Context, pool *pgxpool.Pool) {
-	go func() {
+func StartSampler(ctx context.Context, log logger.Logger, pool *pgxpool.Pool) {
+	safego.Go(log, "metrics-sampler", func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				takeSample(ctx, pool)
+				func() {
+					defer safego.Recover(log, "metrics-sampler-tick")()
+					takeSample(ctx, pool)
+				}()
 			case <-ctx.Done():
 				return
 			}
 		}
-	}()
+	})
 }
 
 func takeSample(ctx context.Context, pool *pgxpool.Pool) {

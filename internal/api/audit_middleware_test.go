@@ -19,7 +19,7 @@ func init() { gin.SetMode(gin.TestMode) }
 
 func buildAuditRouter(auditRepo *testutil.AuditRepo) *gin.Engine {
 	r := gin.New()
-	r.Use(api.AuditMiddleware(auditRepo))
+	r.Use(api.AuditMiddleware(nil, auditRepo))
 
 	r.POST("/service/rest/v1/repositories", func(c *gin.Context) {
 		c.JSON(http.StatusCreated, gin.H{"ok": true})
@@ -120,7 +120,7 @@ func TestAuditMiddleware_Username_FromContext(t *testing.T) {
 		c.Set("userID", "uid-bob")
 		c.Next()
 	})
-	r.Use(api.AuditMiddleware(repo))
+	r.Use(api.AuditMiddleware(nil, repo))
 	r.DELETE("/service/rest/v1/repositories/x", func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
@@ -134,7 +134,7 @@ func TestAuditMiddleware_Username_FromContext(t *testing.T) {
 func TestAuditMiddleware_Repository_CapturesPath(t *testing.T) {
 	repo := testutil.NewAuditRepo()
 	r := gin.New()
-	r.Use(api.AuditMiddleware(repo))
+	r.Use(api.AuditMiddleware(nil, repo))
 	r.PUT("/repository/:repoName/*path", func(c *gin.Context) {
 		c.Status(http.StatusCreated)
 	})
@@ -153,7 +153,7 @@ func TestAuditMiddleware_Repository_CapturesPath(t *testing.T) {
 func TestAuditMiddleware_DockerV2_CapturesManifestRef(t *testing.T) {
 	repo := testutil.NewAuditRepo()
 	r := gin.New()
-	r.Use(api.AuditMiddleware(repo))
+	r.Use(api.AuditMiddleware(nil, repo))
 	r.PUT("/v2/:repoName/manifests/:ref", func(c *gin.Context) {
 		c.Status(http.StatusCreated)
 	})
@@ -167,7 +167,7 @@ func TestAuditMiddleware_DockerV2_CapturesManifestRef(t *testing.T) {
 func TestAuditMiddleware_Webhooks_PrefixIsAudited(t *testing.T) {
 	repo := testutil.NewAuditRepo()
 	r := gin.New()
-	r.Use(api.AuditMiddleware(repo))
+	r.Use(api.AuditMiddleware(nil, repo))
 	r.POST("/api/v1/webhooks", func(c *gin.Context) {
 		c.Status(http.StatusCreated)
 	})
@@ -182,7 +182,7 @@ func TestAuditMiddleware_Webhooks_PrefixIsAudited(t *testing.T) {
 func TestAuditMiddleware_Roles_PrefixIsAudited(t *testing.T) {
 	repo := testutil.NewAuditRepo()
 	r := gin.New()
-	r.Use(api.AuditMiddleware(repo))
+	r.Use(api.AuditMiddleware(nil, repo))
 	r.POST("/service/rest/v1/security/roles", func(c *gin.Context) {
 		c.Status(http.StatusCreated)
 	})
@@ -204,7 +204,7 @@ func TestAuditMiddleware_OIDCCallback_WritesLoginEvent(t *testing.T) {
 		c.Set("audit_source", "oidc")
 		c.Next()
 	})
-	r.Use(api.AuditMiddleware(repo))
+	r.Use(api.AuditMiddleware(nil, repo))
 	r.GET("/api/v1/auth/oidc/callback", func(c *gin.Context) { c.Status(http.StatusFound) })
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/callback?code=x&state=s", nil)
@@ -230,7 +230,7 @@ func TestAuditMiddleware_NonOIDC_GET_NotAudited(t *testing.T) {
 func TestAuditMiddleware_RemoteIP_NonEmpty(t *testing.T) {
 	repo := testutil.NewAuditRepo()
 	r := gin.New()
-	r.Use(api.AuditMiddleware(repo))
+	r.Use(api.AuditMiddleware(nil, repo))
 	r.POST("/service/rest/v1/repositories", func(c *gin.Context) {
 		c.Status(http.StatusCreated)
 	})
