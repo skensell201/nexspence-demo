@@ -114,7 +114,8 @@ storage:
 service:
   type: ClusterIP
   port: 80
-  targetPort: 8081
+  # The container's named port, so the Service follows config.httpListen too.
+  targetPort: http
   annotations: {}
 
 # ── Ingress (nginx / traefik / cilium ingress-controller) ──────────────
@@ -185,7 +186,8 @@ resources:
 livenessProbe:
   httpGet:
     path: /service/rest/v1/status/check
-    port: 8081
+    # The container's named port, so the probe follows config.httpListen.
+    port: http
   initialDelaySeconds: 20
   periodSeconds: 30
   timeoutSeconds: 5
@@ -194,7 +196,7 @@ livenessProbe:
 readinessProbe:
   httpGet:
     path: /service/rest/v1/status/check
-    port: 8081
+    port: http
   initialDelaySeconds: 10
   periodSeconds: 10
   timeoutSeconds: 3

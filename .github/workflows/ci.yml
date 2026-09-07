@@ -27,6 +27,27 @@ jobs:
       - name: Run golangci-lint
         run: golangci-lint run ./...
 
+  helm:
+    name: helm chart (env names map to config keys)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112  # v4.3.0
+      - name: helm lint
+        run: helm lint deploy/helm/nexspence
+      - name: Render every configuration
+        run: |
+          set -euo pipefail
+          helm template check deploy/helm/nexspence >/dev/null
+          helm template check deploy/helm/nexspence --set scanning.enabled=true >/dev/null
+          helm template check deploy/helm/nexspence --set storage.type=s3 --set storage.s3.bucket=b >/dev/null
+          helm template check deploy/helm/nexspence --set config.docker.subdomainConnector.enabled=true >/dev/null
+      # An env name that matches no config key is silently ignored by viper, so
+      # the value in values.yaml never reaches the server and nothing says so.
+      # That has happened three times; this is the guard.
+      - name: Chart env names must match config keys
+        run: python3 scripts/check-helm-env.py
+
   frontend:
     name: frontend tests (≥80% coverage)
     runs-on: ubuntu-latest
