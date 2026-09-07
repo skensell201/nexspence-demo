@@ -1008,7 +1008,10 @@ function EditRepoModal({
         updateBody.blobStoreId = blobStoreId
       }
       if (repo.type === 'group') {
-        updateBody.routingRuleId = routingRuleId || null
+        // Empty string, not null: the API reads an absent field as "unchanged"
+        // and an empty one as "detach" (same convention as blobStoreId), so a
+        // null here would silently leave the old rule attached.
+        updateBody.routingRuleId = routingRuleId || ''
         // Preserve any other formatConfig entries (e.g. writable_member) the API set.
         const { proxy_password_set: _drop, ...rest } = (repo.formatConfig ?? {}) as Record<string, unknown>
         void _drop
