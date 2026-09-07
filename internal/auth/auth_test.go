@@ -173,11 +173,19 @@ func TestValidateToken_TamperedSignature(t *testing.T) {
 	s := newSvc()
 	token, err := s.GenerateToken("uid-12", "grace", []string{"viewer"})
 	require.NoError(t, err)
-	// flip the last character of the signature
+	// Flip a character in the middle of the signature. Not the last one: an
+	// HMAC-SHA256 signature is 32 bytes in 43 base64url characters, so the
+	// final character carries only 2 significant bits and the 16 characters
+	// sharing them all decode to the same bytes — a quarter of the tokens this
+	// test generates would have "tampered" into the identical signature and
+	// validated cleanly.
 	parts := strings.Split(token, ".")
 	require.Len(t, parts, 3)
-	last := parts[2]
-	swapped := last[:len(last)-1] + string(flipChar(last[len(last)-1]))
+	sig := parts[2]
+	require.Greater(t, len(sig), 1)
+	mid := len(sig) / 2
+	swapped := sig[:mid] + string(flipChar(sig[mid])) + sig[mid+1:]
+	require.NotEqual(t, sig, swapped)
 	tampered := parts[0] + "." + parts[1] + "." + swapped
 	_, err = s.ValidateToken(tampered)
 	assert.ErrorIs(t, err, auth.ErrInvalidToken)

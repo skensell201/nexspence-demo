@@ -416,6 +416,23 @@ func (s *NexusMigrationService) run(ctx context.Context, jobID string) {
 		}
 		s.mu.Unlock()
 	}()
+	// Registered after the cleanup defer, so LIFO runs it first — the status
+	// is settled before anyone waiting on dones is released. Every ordinary
+	// exit below leaves a terminal status; a panic doesn't. safego.Go swallows
+	// it so the process survives, and the job would then say "running"
+	// forever: IsActive keeps a second run from starting and IsResumable
+	// refuses to relaunch it, so the operator is left with a job that can
+	// neither finish nor be retried. The early returns that only log (job load
+	// and SetStarted failures) left the same wedge.
+	defer func() {
+		bgCtx := context.Background()
+		cur, err := s.jobs.Get(bgCtx, jobID)
+		if err != nil || cur == nil || !cur.IsActive() {
+			return
+		}
+		s.finish(bgCtx, jobID, domain.MigrationError,
+			"migration ended without finishing (panic recovered); see the server log for the stack")
+	}()
 
 	// Progress and status are written on a background context: a paused or
 	// canceled run still has to record where it stopped.

@@ -308,6 +308,16 @@ func TestBlobStoreMigration_StartLosesInsertRace_ReportsConflict(t *testing.T) {
 func TestBlobStoreMigration_ConcurrentStarts_OnlyOneWins(t *testing.T) {
 	ctx := context.Background()
 
+	// The winning Start launches its runner immediately, and with no assets to
+	// copy that runner used to reach "done" before the loser's Start looked for
+	// an active migration — which made the loser's second migration correct
+	// behavior and the test fail for a reason it was not written to check.
+	// Holding the runner at its first asset query keeps the first migration
+	// "running" for as long as both goroutines are in flight.
+	assets := testutil.NewAssetRepo()
+	assets.MigrationListGate = make(chan struct{})
+	defer close(assets.MigrationListGate)
+
 	sourceID := "store-src-001"
 	bsID := sourceID
 	repo := &domain.Repository{
@@ -316,7 +326,7 @@ func TestBlobStoreMigration_ConcurrentStarts_OnlyOneWins(t *testing.T) {
 	}
 	migRepo := testutil.NewBlobStoreMigrationRepo()
 	svc := service.NewBlobStoreMigrationService(
-		migRepo, testutil.NewAssetRepo(), testutil.NewRepoRepo(repo),
+		migRepo, assets, testutil.NewRepoRepo(repo),
 		testutil.NewBlobStoreRepo(
 			&domain.BlobStore{ID: sourceID, Name: "source-store", Type: "local"},
 			&domain.BlobStore{ID: "store-tgt-a", Name: "target-a", Type: "local"},
@@ -355,5 +365,54 @@ func TestBlobStoreMigration_ConcurrentStarts_OnlyOneWins(t *testing.T) {
 	}
 	if created != 1 {
 		t.Fatalf("want exactly 1 migration created, got %d", created)
+	}
+}
+
+// panickingMigrationAssets blows up at the runner's first asset query — the
+// shape of any nil dereference or bad-shape panic inside a detached migration.
+type panickingMigrationAssets struct {
+	*testutil.AssetRepo
+}
+
+func (panickingMigrationAssets) ListForBlobStoreMigration(_ context.Context, _, _ string) ([]domain.MigrationAssetRow, error) {
+	panic("migration runner blew up")
+}
+
+// safego.Go keeps a panicking migration from taking the process down, but the
+// row it leaves behind said "running" forever: the repository stays locked out
+// of a re-run by the active-migration check, and the operator watches a job
+// that can never finish. The run has to close its own record on the way out.
+func TestBlobStoreMigration_RunnerPanics_MigrationIsMarkedFailed(t *testing.T) {
+	ctx := context.Background()
+
+	sourceID := "store-src-panic"
+	bsID := sourceID
+	repo := &domain.Repository{
+		ID: "repo-panic", Name: "panic-repo", Format: domain.RepoFormat("raw"),
+		Type: domain.TypeHosted, Online: true, BlobStoreID: &bsID,
+	}
+	svc := service.NewBlobStoreMigrationService(
+		testutil.NewBlobStoreMigrationRepo(),
+		panickingMigrationAssets{testutil.NewAssetRepo()},
+		testutil.NewRepoRepo(repo),
+		testutil.NewBlobStoreRepo(
+			&domain.BlobStore{ID: sourceID, Name: "source-store", Type: "local"},
+			&domain.BlobStore{ID: "store-tgt-panic", Name: "target-store", Type: "local"},
+		),
+		storage.NewRegistry(testutil.NewBlobStore()),
+	)
+
+	if _, err := svc.Start(ctx, "panic-repo", "store-tgt-panic"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	m := waitForMigration(t, svc, "panic-repo", "failed")
+	if m.ErrorMessage == nil || !strings.Contains(*m.ErrorMessage, "panic") {
+		t.Fatalf("error message %v does not say why the run ended", m.ErrorMessage)
+	}
+
+	// And the repository is free to try again.
+	if _, err := svc.Start(ctx, "panic-repo", "store-tgt-panic"); err != nil {
+		t.Fatalf("a failed migration must not block a re-run, got %v", err)
 	}
 }

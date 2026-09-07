@@ -224,6 +224,20 @@ func (s *BlobStoreMigrationService) runMigration(ctx context.Context, m *domain.
 		delete(s.cancels, m.ID)
 		s.mu.Unlock()
 	}()
+	// Every ordinary exit below stamps a terminal status. A panic doesn't:
+	// safego.Go swallows it so the process survives, and the row would then
+	// say "running" forever — the repository stays locked out of a re-run by
+	// the active-migration check, and the operator sees a job that never
+	// finishes instead of one that failed. Closing it from a defer catches the
+	// early `return` when UpdateStatus itself fails, too.
+	defer func() {
+		cur, err := s.migrations.Get(context.Background(), m.ID)
+		if err != nil || cur == nil || (cur.Status != "pending" && cur.Status != "running") {
+			return
+		}
+		msg := "migration ended without finishing (panic recovered); see the server log for the stack"
+		_ = s.migrations.FinishMigration(context.Background(), m.ID, "failed", &msg)
+	}()
 
 	// Root span: the migration goroutine runs on context.Background(), cut
 	// loose from the HTTP request that started it (#302). The span hangs off
