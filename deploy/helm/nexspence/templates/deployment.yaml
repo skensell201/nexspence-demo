@@ -84,6 +84,45 @@ spec:
             - name: NEXSPENCE_SCAN_TRIVY_BIN
               value: /opt/trivy/trivy
             {{- end }}
+            {{- if and (not .Values.postgresql.enabled) .Values.externalDatabase.existingSecret }}
+            - name: NEXSPENCE_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalDatabase.existingSecret }}
+                  key: {{ .Values.externalDatabase.existingSecretKey | default "dsn" }}
+            {{- end }}
+            {{- if and (eq .Values.storage.type "s3") .Values.storage.s3.existingSecret }}
+            - name: NEXSPENCE_STORAGE_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.storage.s3.existingSecret }}
+                  key: {{ .Values.storage.s3.existingSecretAccessKeyKey | default "access-key" }}
+            - name: NEXSPENCE_STORAGE_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.storage.s3.existingSecret }}
+                  key: {{ .Values.storage.s3.existingSecretSecretKeyKey | default "secret-key" }}
+            {{- end }}
+            {{- if and .Values.redis.enabled .Values.redis.auth.existingSecret }}
+            - name: NEXSPENCE_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.auth.existingSecret }}
+                  key: {{ .Values.redis.auth.existingSecretKey | default "password" }}
+            {{- else if and .Values.externalRedis.enabled .Values.externalRedis.existingSecret }}
+            - name: NEXSPENCE_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalRedis.existingSecret }}
+                  key: {{ .Values.externalRedis.existingSecretKey | default "password" }}
+            {{- end }}
+            {{- if and .Values.oidc.enabled .Values.oidc.clientSecretExistingSecret }}
+            - name: NEXSPENCE_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oidc.clientSecretExistingSecret }}
+                  key: {{ .Values.oidc.clientSecretExistingSecretKey | default "client-secret" }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "nexspence.fullname" . }}
@@ -118,6 +157,9 @@ spec:
               subPath: config.yaml
               readOnly: true
             {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
       volumes:
         # Writable scratch dirs (rootfs is read-only). The trivy cache lives at
         # /app/.cache (HOME=/app, TRIVY_CACHE_DIR=/app/.cache/trivy in the image).
@@ -133,12 +175,15 @@ spec:
         {{- if eq .Values.storage.type "local" }}
         - name: blobs
           persistentVolumeClaim:
-            claimName: {{ include "nexspence.fullname" . }}-blobs
+            claimName: {{ .Values.storage.local.existingClaim | default (printf "%s-blobs" (include "nexspence.fullname" .)) }}
         {{- end }}
         {{- if .Values.scanning.enabled }}
         - name: trivy-bin
           emptyDir:
             sizeLimit: {{ .Values.scanning.volumeSize }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

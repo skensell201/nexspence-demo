@@ -73,3 +73,37 @@ PostgreSQL DSN — either external or bitnami sub-chart.
 {{- .Values.externalDatabase.dsn }}
 {{- end }}
 {{- end }}
+
+{{/*
+Redis mutual-exclusion guard — bundled and external are not both allowed.
+*/}}
+{{- define "nexspence.redisInUse" -}}
+{{- if and .Values.redis.enabled .Values.externalRedis.enabled }}
+{{- fail "only one of redis.enabled / externalRedis.enabled may be true" }}
+{{- end }}
+{{- end }}
+
+{{- define "nexspence.redisAddr" -}}
+{{- include "nexspence.redisInUse" . }}
+{{- if .Values.redis.enabled }}
+{{- printf "%s-redis-master:6379" .Release.Name }}
+{{- else }}
+{{- .Values.externalRedis.addr }}
+{{- end }}
+{{- end }}
+
+{{- define "nexspence.redisPassword" -}}
+{{- if .Values.redis.enabled }}
+{{- .Values.redis.auth.password }}
+{{- else }}
+{{- .Values.externalRedis.password }}
+{{- end }}
+{{- end }}
+
+{{- define "nexspence.redisDB" -}}
+{{- if .Values.redis.enabled }}
+{{- 0 }}
+{{- else }}
+{{- .Values.externalRedis.db }}
+{{- end }}
+{{- end }}
