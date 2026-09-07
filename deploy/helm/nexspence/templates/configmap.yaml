@@ -25,7 +25,12 @@ data:
   NEXSPENCE_STORAGE_S3_ENDPOINT: {{ .Values.storage.s3.endpoint | quote }}
   NEXSPENCE_STORAGE_S3_BUCKET: {{ .Values.storage.s3.bucket | quote }}
   NEXSPENCE_STORAGE_S3_REGION: {{ .Values.storage.s3.region | quote }}
-  NEXSPENCE_STORAGE_S3_USE_SSL: {{ .Values.storage.s3.useSSL | quote }}
+  # Viper derives the env name from the config key, so these have to be spelled
+  # storage.s3.force_path_style / skip_tls_verify exactly. The chart used to set
+  # NEXSPENCE_STORAGE_S3_USE_SSL, which matches no key at all and was silently
+  # dropped, leaving MinIO installs without path-style addressing.
+  NEXSPENCE_STORAGE_S3_FORCE_PATH_STYLE: {{ .Values.storage.s3.forcePathStyle | quote }}
+  NEXSPENCE_STORAGE_S3_SKIP_TLS_VERIFY: {{ .Values.storage.s3.skipTLSVerify | quote }}
   {{- end }}
 {{- if .Values.config.docker.subdomainConnector.aliases }}
 ---

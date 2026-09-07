@@ -103,7 +103,13 @@ storage:
     region: "us-east-1"
     accessKey: ""
     secretKey: ""
-    useSSL: true
+    # -- Path-style addressing (bucket in the path, not the hostname). Required
+    # by MinIO and most non-AWS S3 implementations.
+    forcePathStyle: true
+    # -- Accept the endpoint's TLS certificate without verifying it. For an
+    # on-prem S3 behind a private CA; the connection carries the credentials and
+    # every blob, so prefer trusting the CA.
+    skipTLSVerify: false
 
 service:
   type: ClusterIP

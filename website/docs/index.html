@@ -638,6 +638,7 @@ helm install nexspence deploy/helm/nexspence \
       <tr><td><code>storage.s3.endpoint</code></td><td>—</td><td>S3 endpoint URL (e.g. <code>http://minio:9000</code>)</td></tr>
       <tr><td><code>storage.s3.bucket</code></td><td>—</td><td>S3 bucket name (required when type=s3)</td></tr>
       <tr><td><code>storage.s3.force_path_style</code></td><td><code>true</code></td><td>Required for MinIO / non-AWS S3</td></tr>
+      <tr><td><code>storage.s3.skip_tls_verify</code></td><td><code>false</code></td><td>Accept an unverifiable TLS certificate — for an on-prem S3 behind a private CA. Blob stores created in the UI carry the same option per store.</td></tr>
       <tr><td><code>redis.enabled</code></td><td><code>false</code></td><td>Enable Redis (required for HA)</td></tr>
       <tr><td><code>redis.addr</code></td><td><code>localhost:6379</code></td><td>Redis address</td></tr>
       <tr><td><code>cleanup.default_schedule</code></td><td><code>0 2 * * *</code></td><td>Default cron for cleanup policies</td></tr>

@@ -55,6 +55,7 @@ storage:
   #   access_key_id: ""
   #   secret_access_key: ""
   #   force_path_style: true
+  #   skip_tls_verify: false        # accept an unverifiable certificate (private CA); off by default
 
 auth:
   jwt_secret: "CHANGE_ME_AT_LEAST_32_CHARACTERS_LONG"   # from source / native install: set this (or NEXSPENCE_AUTH_JWT_SECRET) — server refuses to start with this placeholder unless allow_insecure_defaults=true. The Docker image and Helm chart auto-generate a unique secret when it is unset, so you don't set it there.

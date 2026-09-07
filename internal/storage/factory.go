@@ -23,6 +23,7 @@ func NewBlobStoreFromConfig(ctx context.Context, cfg *nexspencecfg.Config) (Blob
 			AccessKeyID:     s3cfg.AccessKeyID,
 			SecretAccessKey: s3cfg.SecretAccessKey,
 			ForcePathStyle:  s3cfg.ForcePathStyle,
+			SkipTLSVerify:   s3cfg.SkipTLSVerify,
 		})
 	default: // "local" or empty
 		basePath := cfg.Storage.Local.BasePath
