@@ -43,6 +43,7 @@ Thumbs.db
 .superpowers/
 
 #LLM
+AGENTS.md
 CLAUDE.md
 bugs.md
 findings.md
@@ -56,6 +57,7 @@ task_plan.md
 docs/superpowers/brainstorm/
 docs/superpowers/plans/
 docs/superpowers/specs/
+graphify-out
 
 # Monitoring — API token
 deploy/monitoring/prometheus-token
