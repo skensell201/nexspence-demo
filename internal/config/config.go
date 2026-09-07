@@ -171,6 +171,9 @@ type S3Config struct {
 	AccessKeyID     string `mapstructure:"access_key_id"`
 	SecretAccessKey string `mapstructure:"secret_access_key"`
 	ForcePathStyle  bool   `mapstructure:"force_path_style"`
+	// SkipTLSVerify disables certificate verification against the endpoint,
+	// for an on-prem S3 fronted by a private CA (#403). Off by default.
+	SkipTLSVerify bool `mapstructure:"skip_tls_verify"`
 }
 
 // AuthConfig holds JWT, bcrypt, anonymous-access, and token-expiry settings.
@@ -529,6 +532,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("storage.s3.access_key_id", "")
 	v.SetDefault("storage.s3.secret_access_key", "")
 	v.SetDefault("storage.s3.force_path_style", false)
+	v.SetDefault("storage.s3.skip_tls_verify", false)
 	v.SetDefault("database.max_conns", 100)
 	v.SetDefault("database.min_conns", 5)
 	v.SetDefault("database.max_idle_sec", 300)

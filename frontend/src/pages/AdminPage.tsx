@@ -1604,6 +1604,7 @@ function BlobStoreDetailModal({ name, blobStores: _blobStores, onClose }: { name
   const [editEndpoint, setEditEndpoint]   = useState('')
   const [editAccessKey, setEditAccessKey] = useState('')
   const [editSecretKey, setEditSecretKey] = useState('')
+  const [editSkipTLS, setEditSkipTLS]     = useState(false)
   const [editPath, setEditPath]           = useState('')
   const [editErr, setEditErr]             = useState('')
   const delMut = useMutation({
@@ -1625,7 +1626,7 @@ function BlobStoreDetailModal({ name, blobStores: _blobStores, onClose }: { name
       // untouched field must omit it entirely — the server then keeps the stored one.
       const config: Record<string, unknown> = bs.type === 's3'
         ? { bucket: editBucket, region: editRegion, endpoint: editEndpoint,
-            access_key: editAccessKey,
+            access_key: editAccessKey, skip_tls_verify: editSkipTLS,
             ...(editSecretKey ? { secret_key: editSecretKey } : {}) }
         : { path: editPath }
       return nexusApi.updateBlobStore(bs.type, bs.name, { config, quotaBytes: bs.quotaBytes ?? null })
@@ -1671,6 +1672,7 @@ function BlobStoreDetailModal({ name, blobStores: _blobStores, onClose }: { name
     setEditEndpoint((cfg.endpoint as string) ?? '')
     setEditAccessKey((cfg.access_key as string) ?? '')
     setEditSecretKey('')
+    setEditSkipTLS(cfg.skip_tls_verify === true)
     setEditPath((cfg.path as string) ?? '')
     setEditErr('')
     setEditing(true)
@@ -1778,6 +1780,15 @@ function BlobStoreDetailModal({ name, blobStores: _blobStores, onClose }: { name
                     <label style={{ fontSize: 11, color: 'var(--holo-text-faint)', display: 'block', marginBottom: 3 }}>Endpoint</label>
                     <HoloInput value={editEndpoint} onChange={e => setEditEndpoint(e.target.value)} placeholder="leave empty for AWS S3" />
                   </div>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: 12, color: 'var(--holo-text)' }}>
+                    <input type="checkbox" checked={editSkipTLS} onChange={e => setEditSkipTLS(e.target.checked)} style={{ marginTop: 2 }} />
+                    <span>
+                      Skip TLS certificate verification
+                      <span style={{ display: 'block', color: 'var(--holo-text-faint)', fontSize: 11 }}>
+                        For an endpoint behind a private CA. Credentials and every blob travel over an unverified connection.
+                      </span>
+                    </span>
+                  </label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <div>
                       <label style={{ fontSize: 11, color: 'var(--holo-text-faint)', display: 'block', marginBottom: 3 }}>Access Key</label>
@@ -1911,6 +1922,7 @@ function CreateBlobStoreModal({ blobStores, onClose }: { blobStores: BlobStore[]
   const [prefix, setPrefix] = useState('')
   const [accessKey, setAccessKey] = useState('')
   const [secretKey, setSecretKey] = useState('')
+  const [skipTLS, setSkipTLS] = useState(false)
   const [quotaGB, setQuotaGB] = useState('')
   const [err, setErr] = useState('')
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null)
@@ -1930,7 +1942,7 @@ function CreateBlobStoreModal({ blobStores, onClose }: { blobStores: BlobStore[]
       const config: Record<string, unknown> = type === 'local'
         ? { path }
         : type === 's3'
-        ? { bucket, region, endpoint, prefix, access_key: accessKey, secret_key: secretKey }
+        ? { bucket, region, endpoint, prefix, access_key: accessKey, secret_key: secretKey, skip_tls_verify: skipTLS }
         : {}
       if (type === 'group') {
         config.fill_policy = groupFillPolicy
@@ -1957,7 +1969,7 @@ function CreateBlobStoreModal({ blobStores, onClose }: { blobStores: BlobStore[]
     try {
       const cfg: Record<string, unknown> = type === 'local'
         ? { path }
-        : { bucket, region, endpoint, prefix, access_key: accessKey, secret_key: secretKey }
+        : { bucket, region, endpoint, prefix, access_key: accessKey, secret_key: secretKey, skip_tls_verify: skipTLS }
       const res = await nexusApi.testBlobStore(type === 'group' ? 'local' : type, cfg)
       if (seq !== testReqSeq.current) return // a field changed since this test started
       setTestResult(res.data)
@@ -2014,6 +2026,17 @@ function CreateBlobStoreModal({ blobStores, onClose }: { blobStores: BlobStore[]
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--holo-text-dim)', marginBottom: 4, display: 'block' }}>Endpoint (leave empty for AWS)</label>
               <HoloInput value={endpoint} onChange={e => { testReqSeq.current++; setTestResult(null); setEndpoint(e.target.value) }} placeholder="https://minio.example.com" />
             </div>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: 12, color: 'var(--holo-text)' }}>
+              <input type="checkbox" checked={skipTLS}
+                onChange={e => { testReqSeq.current++; setTestResult(null); setSkipTLS(e.target.checked) }}
+                style={{ marginTop: 2 }} />
+              <span>
+                Skip TLS certificate verification
+                <span style={{ display: 'block', color: 'var(--holo-text-faint)', fontSize: 11 }}>
+                  For an endpoint behind a private CA. Credentials and every blob travel over an unverified connection.
+                </span>
+              </span>
+            </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--holo-text-dim)', marginBottom: 4, display: 'block' }}>Access Key</label>

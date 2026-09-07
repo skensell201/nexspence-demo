@@ -157,6 +157,7 @@ uses OSV.dev and works with nothing installed.
 | `storage.s3.bucket` | — | S3 bucket name (required when type=s3) |
 | `storage.s3.endpoint` | — | S3 endpoint URL (e.g. `http://minio:9000`) |
 | `storage.s3.force_path_style` | `true` | Required for MinIO / non-AWS S3 |
+| `storage.s3.skip_tls_verify` | `false` | Accept the endpoint's TLS certificate without verifying it. For an on-prem S3 behind a private CA whose root you cannot install into the container's trust store; the connection carries the credentials and every blob, so prefer trusting the CA. Per-blob-store stores set the same thing with `skip_tls_verify` in their config (System Admin → Blob Stores → *Skip TLS certificate verification*). |
 | `auth.jwt_secret` | — | JWT signing key. **From source / native install: set this (min 32 chars) before production.** The Docker image and Helm chart auto-generate a unique secret when it is unset. |
 | `auth.encryption_key` | — | Optional base64 32-byte key for replication credentials (decouples them from `jwt_secret`; existing rows are re-encrypted automatically at startup). Generate: `openssl rand -base64 32` |
 | `auth.jwt_expiry_hours` | `24` | JWT token lifetime |

@@ -117,6 +117,9 @@ func cmdServe() *cobra.Command {
 			// Storage
 			if cfg.Storage.DefaultType == "s3" {
 				log.Info("storage", "type", "s3", "bucket", cfg.Storage.S3.Bucket, "endpoint", cfg.Storage.S3.Endpoint)
+				if cfg.Storage.S3.SkipTLSVerify {
+					log.Warn("storage.s3.skip_tls_verify is enabled — the S3 endpoint's certificate is NOT verified; use only with a private CA you cannot install into the trust store")
+				}
 			} else {
 				log.Info("storage", "type", "local", "path", cfg.Storage.Local.BasePath)
 			}
@@ -335,6 +338,7 @@ func desiredS3Config(s3 config.S3Config) map[string]any {
 		"access_key":       s3.AccessKeyID,
 		"secret_key":       s3.SecretAccessKey,
 		"force_path_style": s3.ForcePathStyle,
+		"skip_tls_verify":  s3.SkipTLSVerify,
 	}
 }
 

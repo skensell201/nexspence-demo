@@ -2,9 +2,11 @@ package storage
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -34,6 +36,13 @@ type S3Options struct {
 	AccessKeyID     string
 	SecretAccessKey string
 	ForcePathStyle  bool
+	// SkipTLSVerify turns off certificate verification against the endpoint.
+	// An on-prem MinIO or Ceph fronted by a private CA is the reason it exists
+	// (#403): without it the store cannot be created at all, and the operator's
+	// only alternative is to install the CA into the container's trust store.
+	// It is an explicit per-store opt-in and never a default — the connection
+	// it enables carries the credentials and every blob.
+	SkipTLSVerify bool
 }
 
 // NewS3BlobStore creates an S3BlobStore and validates connectivity by checking the bucket.
@@ -50,6 +59,10 @@ func NewS3BlobStore(ctx context.Context, opts S3Options) (*S3BlobStore, error) {
 		cfgOpts = append(cfgOpts, config.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(opts.AccessKeyID, opts.SecretAccessKey, ""),
 		))
+	}
+
+	if opts.SkipTLSVerify {
+		cfgOpts = append(cfgOpts, config.WithHTTPClient(unverifiedTLSClient()))
 	}
 
 	awsCfg, err := config.LoadDefaultConfig(ctx, cfgOpts...)
@@ -82,6 +95,18 @@ func NewS3BlobStore(ctx context.Context, opts S3Options) (*S3BlobStore, error) {
 		bucket:         opts.Bucket,
 		forcePathStyle: opts.ForcePathStyle,
 	}, nil
+}
+
+// unverifiedTLSClient is the process-wide default transport with certificate
+// verification switched off. It is cloned from http.DefaultTransport rather
+// than built from scratch so proxy settings, connection pooling and HTTP/2 keep
+// behaving the way every other client here does; only the trust decision
+// changes.
+func unverifiedTLSClient() *http.Client {
+	tr, _ := http.DefaultTransport.(*http.Transport)
+	tr = tr.Clone()
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // the point of the option: a per-store operator opt-in for a private CA (#403)
+	return &http.Client{Transport: tr}
 }
 
 // objectKey shards the blob key into a two-level prefix to avoid hot-spotting.

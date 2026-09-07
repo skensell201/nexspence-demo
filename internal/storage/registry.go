@@ -143,6 +143,7 @@ func newFromDescriptor(ctx context.Context, desc BlobStoreDescriptor) (BlobStore
 		if bv, ok := desc.Config["force_path_style"].(bool); ok {
 			opts.ForcePathStyle = bv
 		}
+		opts.SkipTLSVerify = boolVal(desc.Config, "skip_tls_verify")
 		if opts.Bucket == "" {
 			return nil, fmt.Errorf("s3 blob store: bucket is required")
 		}
@@ -164,4 +165,21 @@ func strVal(m map[string]any, key string) string {
 	}
 	v, _ := m[key].(string)
 	return v
+}
+
+// boolVal reads a boolean config value. A store config round-trips through
+// JSONB, so a value the frontend sent as true can come back as the string
+// "true"; both spellings mean the same thing here.
+func boolVal(m map[string]any, key string) bool {
+	if m == nil {
+		return false
+	}
+	switch v := m[key].(type) {
+	case bool:
+		return v
+	case string:
+		return v == "true"
+	default:
+		return false
+	}
 }

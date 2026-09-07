@@ -147,6 +147,24 @@ describe('AdminPage — Blob Stores tab', () => {
     expect(cfg?.secret_key).toBe('rotat3d')
   })
 
+  it('round-trips the skip-TLS-verify flag through the edit form', async () => {
+    let put: Record<string, unknown> | null = null
+    server.use(
+      http.put('/service/rest/v1/blobstores/:type/:name', async ({ request }) => {
+        put = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json(s3Store)
+      }),
+    )
+    await openS3Edit()
+    const box = screen.getByLabelText(/Skip TLS certificate verification/i)
+    expect(box).not.toBeChecked() // the stored config has no flag
+    fireEvent.click(box)
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/ }))
+    await waitFor(() => expect(put).toBeTruthy())
+    const cfg = (put! as { config?: Record<string, unknown> }).config
+    expect(cfg?.skip_tls_verify).toBe(true)
+  })
+
   it('shows empty state', async () => {
     server.use(http.get('/service/rest/v1/blobstores', () => HttpResponse.json([])))
     renderAdmin('blobs')
