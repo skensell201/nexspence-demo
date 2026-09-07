@@ -17,6 +17,15 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- if .Values.postgresql.enabled }}
+        # Roll the app when the chart-managed database password changes.
+        # Existing Secret contents are opaque to Helm and require a manual restart.
+        {{- if .Values.postgresql.auth.existingSecret }}
+        checksum/postgresql-password: {{ printf "%s/%s" .Values.postgresql.auth.existingSecret (include "nexspence.postgresql.secretPasswordKey" .) | sha256sum }}
+        {{- else }}
+        checksum/postgresql-password: {{ .Values.postgresql.auth.password | sha256sum }}
+        {{- end }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -33,8 +42,27 @@ spec:
       serviceAccountName: {{ include "nexspence.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- if .Values.scanning.enabled }}
+      {{- if or .Values.postgresql.enabled .Values.scanning.enabled }}
       initContainers:
+        {{- if .Values.postgresql.enabled }}
+        - name: wait-for-postgresql
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - timeout {{ .Values.postgresql.initTimeoutSeconds }} sh -c "until pg_isready -h {{ include "nexspence.postgresql.fullname" . }} -U {{ .Values.postgresql.auth.username | squote }}; do sleep 2; done"
+          securityContext:
+            {{- toYaml .Values.postgresql.securityContext | nindent 12 }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+        {{- end }}
+        {{- if .Values.scanning.enabled }}
         # Nexspence ships no scanner. This copies the operator's chosen Trivy
         # into a shared volume; the application execs it from there.
         - name: trivy-copy
@@ -57,6 +85,7 @@ spec:
           volumeMounts:
             - name: trivy-bin
               mountPath: /opt/trivy
+        {{- end }}
       {{- end }}
       containers:
         - name: nexspence
@@ -83,6 +112,22 @@ spec:
               value: "true"
             - name: NEXSPENCE_SCAN_TRIVY_BIN
               value: /opt/trivy/trivy
+            {{- end }}
+            {{- if .Values.postgresql.enabled }}
+            # pgx uses PGPASSWORD when the bundled DSN omits userinfo password.
+            # This keeps existing Secrets GitOps-safe and passwords out of manifests.
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nexspence.postgresql.secretName" . }}
+                  key: {{ include "nexspence.postgresql.secretPasswordKey" . }}
+            {{- end }}
+            {{- if and (not .Values.postgresql.enabled) .Values.externalDatabase.existingSecret }}
+            - name: NEXSPENCE_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalDatabase.existingSecret | quote }}
+                  key: {{ default "dsn" .Values.externalDatabase.existingSecretDsnKey | quote }}
             {{- end }}
           envFrom:
             - configMapRef:

@@ -160,3 +160,104 @@ jobs:
           echo "storage coverage: ${pct}%"
           awk -v p="$pct" 'BEGIN { exit (p+0 >= 80) ? 0 : 1 }' || {
             echo "::error::storage coverage ${pct}% is below the 80% floor"; exit 1; }
+
+  helm:
+    name: helm lint and template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Lint and render the chart
+        # helm is pre-installed on ubuntu-latest (same as the release workflow).
+        working-directory: deploy/helm/nexspence
+        run: |
+          set -euo pipefail
+
+          render() {
+            name="$1"
+            shift
+            helm template ci . "$@" >"/tmp/helm-${name}.yaml"
+            docker run --rm \
+              -v /tmp:/tmp:ro \
+              ghcr.io/yannh/kubeconform:v0.7.0@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c \
+              -strict -ignore-missing-schemas -summary \
+              "/tmp/helm-${name}.yaml"
+          }
+
+          expect_failure() {
+            description="$1"
+            shift
+            if "$@" >/tmp/helm-expected-failure.log 2>&1; then
+              echo "::error::expected failure: ${description}"
+              exit 1
+            fi
+          }
+
+          helm lint .
+          render bundled
+          grep -q 'name: ci-postgres' /tmp/helm-bundled.yaml
+          grep -q 'clusterIP: None' /tmp/helm-bundled.yaml
+
+          render external-dsn \
+            --set postgresql.enabled=false \
+            --set-string externalDatabase.dsn='postgres://u:p@host:5432/nexspence?sslmode=disable'
+          grep -q 'NEXSPENCE_DATABASE_DSN: "postgres://u:p@host:5432/nexspence?sslmode=disable"' /tmp/helm-external-dsn.yaml
+          if grep -q 'kind: StatefulSet' /tmp/helm-external-dsn.yaml; then
+            echo "::error::bundled Postgres StatefulSet must not render when postgresql.enabled=false"
+            exit 1
+          fi
+
+          render external-secret \
+            --set postgresql.enabled=false \
+            --set-string externalDatabase.dsn='' \
+            --set externalDatabase.existingSecret=external-db
+          grep -q 'name: external-db' /tmp/helm-external-secret.yaml
+          grep -q 'key: dsn' /tmp/helm-external-secret.yaml
+
+          render bundled-existing-secret \
+            --set postgresql.auth.existingSecret=postgres-db \
+            --set-string postgresql.auth.password=''
+          grep -q 'name: PGPASSWORD' /tmp/helm-bundled-existing-secret.yaml
+          grep -q 'name: postgres-db' /tmp/helm-bundled-existing-secret.yaml
+          grep -q 'NEXSPENCE_DATABASE_DSN: "postgres://nexspence@ci-postgres:5432/nexspence?sslmode=disable"' /tmp/helm-bundled-existing-secret.yaml
+          if grep -q 'postgres://nexspence:' /tmp/helm-bundled-existing-secret.yaml; then
+            echo "::error::bundled DSN must not contain a password slot"
+            exit 1
+          fi
+
+          render bundled-existing-secret-with-fallback \
+            --set postgresql.auth.existingSecret=postgres-db \
+            --set-string postgresql.auth.password='must-not-render'
+          if grep -q 'must-not-render' /tmp/helm-bundled-existing-secret-with-fallback.yaml; then
+            echo "::error::password fallback rendered despite existingSecret"
+            exit 1
+          fi
+
+          render bundled-space-username \
+            --set-string postgresql.auth.username='user name' \
+            --set-string postgresql.auth.password='a b'
+          grep -q 'NEXSPENCE_DATABASE_DSN: "postgres://user%20name@ci-postgres:5432/nexspence?sslmode=disable"' /tmp/helm-bundled-space-username.yaml
+
+          render bundled-ephemeral --set postgresql.persistence.enabled=false
+          grep -q 'emptyDir: {}' /tmp/helm-bundled-ephemeral.yaml
+          if grep -q 'volumeClaimTemplates:' /tmp/helm-bundled-ephemeral.yaml; then
+            echo "::error::volumeClaimTemplates must not render when persistence is disabled"
+            exit 1
+          fi
+
+          for values in values-examples/*.yaml; do
+            name="example-$(basename "${values%.*}")"
+            render "$name" -f "$values"
+            helm lint . -f "$values"
+          done
+
+          expect_failure "external database without DSN or Secret" \
+            helm template ci . \
+              --set postgresql.enabled=false \
+              --set-string externalDatabase.dsn='' \
+              --set-string externalDatabase.existingSecret=''
+          expect_failure "bundled database without any password source" \
+            helm template ci . \
+              --set-string postgresql.auth.password='' \
+              --set-string postgresql.auth.existingSecret=''
+          expect_failure "unsupported former Bitnami persistence keys" \
+            helm lint . --set postgresql.primary.persistence.size=20Gi

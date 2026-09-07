@@ -60,14 +60,57 @@ Service account name.
 {{- end }}
 
 {{/*
-PostgreSQL DSN — either external or bitnami sub-chart.
+Bundled PostgreSQL Service / StatefulSet name.
+
+Deliberately {release}-postgres, not {release}-postgresql: the former Bitnami
+sub-chart owned a StatefulSet of that second name, and Helm would patch it
+in place on upgrade (spec.selector / volumeClaimTemplates are immutable).
+A new name makes this a create, and leaves the Bitnami PVC available to dump.
+*/}}
+{{- define "nexspence.postgresql.fullname" -}}
+{{- printf "%s-postgres" .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{- define "nexspence.postgresql.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "nexspence.name" . }}-postgres
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: postgresql
+{{- end }}
+
+{{/*
+Secret that holds the bundled Postgres password.
+*/}}
+{{- define "nexspence.postgresql.secretName" -}}
+{{- if .Values.postgresql.auth.existingSecret }}
+{{- .Values.postgresql.auth.existingSecret }}
+{{- else }}
+{{- include "nexspence.postgresql.fullname" . }}
+{{- end }}
+{{- end }}
+
+{{- define "nexspence.postgresql.secretPasswordKey" -}}
+{{- if .Values.postgresql.auth.existingSecret -}}
+{{- default "postgres-password" .Values.postgresql.auth.existingSecretPasswordKey -}}
+{{- else -}}
+postgres-password
+{{- end -}}
+{{- end }}
+
+{{/*
+PostgreSQL DSN — bundled in-chart Postgres or an operator-supplied DSN.
+The bundled DSN intentionally omits the password: the Deployment exposes it
+through PGPASSWORD, which pgx reads without URI encoding or a cluster lookup.
+The username is URL-encoded; urlquery emits "+" for spaces, but pgx treats
+that as a literal plus in URI userinfo, so replace it with "%20".
+When postgresql.enabled=false and
+externalDatabase.existingSecret is set, the DSN is not composed here; the
+Deployment reads it from that Secret instead.
 */}}
 {{- define "nexspence.databaseDSN" -}}
 {{- if .Values.postgresql.enabled }}
-{{- printf "postgres://%s:%s@%s-postgresql:5432/%s?sslmode=disable"
-    .Values.postgresql.auth.username
-    .Values.postgresql.auth.password
-    .Release.Name
+{{- printf "postgres://%s@%s:5432/%s?sslmode=disable"
+    (.Values.postgresql.auth.username | urlquery | replace "+" "%20")
+    (include "nexspence.postgresql.fullname" .)
     .Values.postgresql.auth.database }}
 {{- else }}
 {{- .Values.externalDatabase.dsn }}

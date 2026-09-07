@@ -145,8 +145,6 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           echo "${{ secrets.RELEASE_PAT }}" | helm registry login "${REGISTRY}" -u "${{ github.actor }}" --password-stdin
           cd deploy/helm/nexspence
-          # The postgresql sub-chart is vendored under charts/ (Chart.lock pinned),
-          # so packaging needs no network and no extra dependency step.
           helm package . --version "$VERSION" --app-version "$VERSION"
           helm push "nexspence-${VERSION}.tgz" "oci://${REGISTRY}/${{ github.repository_owner }}/charts"
           echo "Pushed chart: oci://${REGISTRY}/${{ github.repository_owner }}/charts/nexspence:${VERSION}"

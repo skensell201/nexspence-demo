@@ -198,7 +198,6 @@ Full command reference and CI/CD examples: **[github.com/nexspence/nxs](https://
 **Requirements:** Helm 3.x, Kubernetes >= 1.26
 
 ```bash
-cd deploy/helm/nexspence && helm dependency update
 helm install nexspence \
   deploy/helm/nexspence \
   -f deploy/helm/nexspence/values-examples/nginx.yaml \
