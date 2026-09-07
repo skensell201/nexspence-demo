@@ -57,6 +57,19 @@ func (h *RepositoryHandler) Get(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	// List and ComponentHandler.GetQuota both filter by RBAC (GetQuota citing
+	// #295 explicitly); this sibling get-by-name endpoint didn't, letting any
+	// authenticated user read a private repository's full config (format,
+	// blob store, remote proxy URL, allowAnonymous) just by knowing or
+	// guessing its name.
+	userID, _ := c.Get("userID")
+	roles, _ := c.Get("roles")
+	visible := h.rbacSvc.FilterRepos(c.Request.Context(),
+		stringVal(userID), stringSliceVal(roles), []domain.Repository{*r})
+	if len(visible) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "repository not found"})
+		return
+	}
 	c.JSON(http.StatusOK, domain.RedactedRepository(*r))
 }
 

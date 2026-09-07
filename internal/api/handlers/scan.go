@@ -8,17 +8,31 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/nexspence-oss/nexspence/internal/domain"
+	"github.com/nexspence-oss/nexspence/internal/repository"
 	"github.com/nexspence-oss/nexspence/internal/service"
 )
 
 // ScanHandler serves the vulnerability-scan REST endpoints.
 type ScanHandler struct {
-	svc *service.ScanService
+	svc        *service.ScanService
+	components repository.ComponentRepo
+	repos      repository.RepositoryRepo
+	rbacSvc    *service.RBACService
 }
 
 // NewScanHandler constructs a ScanHandler backed by the given scan service.
 func NewScanHandler(svc *service.ScanService) *ScanHandler {
 	return &ScanHandler{svc: svc}
+}
+
+// WithRBAC wires the component/repository repos and RBAC service so
+// GetScanResult can hide a scan result the caller has no browse privilege
+// over. Nil-safe: unset, GetScanResult keeps its prior (unfiltered) behavior.
+func (h *ScanHandler) WithRBAC(components repository.ComponentRepo, repos repository.RepositoryRepo, rbacSvc *service.RBACService) *ScanHandler {
+	h.components = components
+	h.repos = repos
+	h.rbacSvc = rbacSvc
+	return h
 }
 
 // Scan triggers a Trivy vulnerability scan for a Docker component.
@@ -59,6 +73,32 @@ func (h *ScanHandler) GetScanResult(c *gin.Context) {
 	}
 
 	id := c.Param("id")
+
+	// Unlike ComponentHandler.Get (which filters by RBAC and cites #291: "a
+	// direct GET by id must answer the same question... or knowing a UUID
+	// becomes a key to metadata and scan results the caller has no privilege
+	// over"), this sibling endpoint never checked repository visibility. 404
+	// (not 403) on denial keeps the id unguessable, matching that convention.
+	if h.rbacSvc != nil && h.components != nil && h.repos != nil {
+		comp, cerr := h.components.Get(c.Request.Context(), id)
+		if cerr != nil || comp == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+		repo, rerr := h.repos.Get(c.Request.Context(), comp.Repository)
+		if rerr != nil || repo == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+		userID, _ := c.Get("userID")
+		roles, _ := c.Get("roles")
+		ok, aerr := h.rbacSvc.CanAccessRepo(c.Request.Context(), stringVal(userID), stringSliceVal(roles), repo, "", "browse")
+		if aerr != nil || !ok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "component not found"})
+			return
+		}
+	}
+
 	result, err := h.svc.GetResult(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

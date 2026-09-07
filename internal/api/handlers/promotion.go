@@ -7,17 +7,69 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/nexspence-oss/nexspence/internal/domain"
+	"github.com/nexspence-oss/nexspence/internal/repository"
 	"github.com/nexspence-oss/nexspence/internal/service"
 )
 
 // PromotionHandler serves the staging and build-promotion REST endpoints.
 type PromotionHandler struct {
-	svc *service.PromotionService
+	svc     *service.PromotionService
+	repos   repository.RepositoryRepo
+	rbacSvc *service.RBACService
 }
 
 // NewPromotionHandler constructs a PromotionHandler backed by the given promotion service.
 func NewPromotionHandler(svc *service.PromotionService) *PromotionHandler {
 	return &PromotionHandler{svc: svc}
+}
+
+// WithRBAC wires the repository repo and RBAC service so ListRules/
+// GetComponentRules hide rules naming a repository the caller has no browse
+// privilege over. Nil-safe: unset, both endpoints keep their prior
+// (unfiltered) behavior.
+func (h *PromotionHandler) WithRBAC(repos repository.RepositoryRepo, rbacSvc *service.RBACService) *PromotionHandler {
+	h.repos = repos
+	h.rbacSvc = rbacSvc
+	return h
+}
+
+// visibleRules filters rules to ones the caller can browse both FromRepo and
+// ToRepo. A rule names both repositories, so browse on only one side would
+// still leak the other side's name, path filter, and approval gate — e.g.
+// someone with access to a "staging" repo could enumerate the production
+// repositories it promotes into. Nil-safe: with WithRBAC unset, returns rules
+// unchanged.
+func (h *PromotionHandler) visibleRules(c *gin.Context, rules []domain.PromotionRule) []domain.PromotionRule {
+	if h.repos == nil || h.rbacSvc == nil {
+		return rules
+	}
+	ctx := c.Request.Context()
+	userID, _ := c.Get("userID")
+	roles, _ := c.Get("roles")
+	userIDStr, _ := userID.(string)
+	rolesSlice, _ := roles.([]string)
+
+	repoCache := map[string]*domain.Repository{}
+	canBrowse := func(name string) bool {
+		repo, cached := repoCache[name]
+		if !cached {
+			repo, _ = h.repos.Get(ctx, name)
+			repoCache[name] = repo
+		}
+		if repo == nil {
+			return false
+		}
+		ok, _ := h.rbacSvc.CanAccessRepo(ctx, userIDStr, rolesSlice, repo, "", "browse")
+		return ok
+	}
+
+	visible := make([]domain.PromotionRule, 0, len(rules))
+	for _, r := range rules {
+		if canBrowse(r.FromRepo) && canBrowse(r.ToRepo) {
+			visible = append(visible, r)
+		}
+	}
+	return visible
 }
 
 // ListRules handles GET /api/v1/promotion/rules
@@ -30,6 +82,10 @@ func (h *PromotionHandler) ListRules(c *gin.Context) {
 	if rules == nil {
 		rules = []domain.PromotionRule{}
 	}
+	// This endpoint sits under the non-admin authed group and, unfiltered,
+	// returns every promotion rule system-wide — full topology (source repo,
+	// target repo, path filter, approval gate) regardless of privilege.
+	rules = h.visibleRules(c, rules)
 	c.JSON(http.StatusOK, rules)
 }
 
@@ -99,6 +155,7 @@ func (h *PromotionHandler) GetComponentRules(c *gin.Context) {
 	if rules == nil {
 		rules = []domain.PromotionRule{}
 	}
+	rules = h.visibleRules(c, rules)
 	c.JSON(http.StatusOK, rules)
 }
 

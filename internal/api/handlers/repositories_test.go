@@ -115,6 +115,35 @@ func TestRepositoryHandler_Get_RepoError_500(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
+// List and ComponentHandler.GetQuota both filter by RBAC; Get (by name) didn't
+// — a privilege-less caller could read a private repository's full config just
+// by knowing its name. 404, not 403, keeps the name from being distinguishable
+// from "doesn't exist" (#291's convention on the sibling component endpoint).
+func TestRepositoryHandler_Get_DeniedWithoutPrivilege(t *testing.T) {
+	repos := testutil.NewRepoRepo()
+	blobs := testutil.NewBlobStoreRepo()
+	policies := testutil.NewCleanupPolicyRepo()
+	store := testutil.NewBlobStore()
+	repoSvc := service.NewRepositoryService(repos, blobs, store, policies)
+	rbacSvc := service.NewRBACService(emptyRBACRepo{}, repos, zap.NewNop().Sugar(), true)
+	h := handlers.NewRepositoryHandler(repoSvc, rbacSvc)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", "eve")
+		c.Set("roles", []string{"nx-viewer"})
+		c.Next()
+	})
+	r.GET("/service/rest/v1/repositories/:name", h.Get)
+
+	require.NoError(t, repos.Create(testContext(), &domain.Repository{
+		ID: "r1", Name: "private-raw", Format: domain.FormatRaw, Type: domain.TypeHosted, AllowAnonymous: false,
+	}))
+
+	rec := do(t, r, http.MethodGet, "/service/rest/v1/repositories/private-raw", nil)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
 // ── Create ────────────────────────────────────────────────────
 
 func TestRepositoryHandler_Create_OK(t *testing.T) {

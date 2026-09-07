@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"io"
 	"io/fs"
 	"net/http"
@@ -304,11 +305,11 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 	browseH := handlers.NewBrowseHandler(formatDeps, rbacSvc)
 	cleanupH := handlers.NewCleanupHandler(cleanupRepo, repoRepo, cleanupSvc, log)
 	auditH := handlers.NewAuditHandler(auditRepo)
-	scanH := handlers.NewScanHandler(scanSvc)
+	scanH := handlers.NewScanHandler(scanSvc).WithRBAC(componentRepo, repoRepo, rbacSvc)
 	tokenH := handlers.NewTokenHandler(tokenSvc, userSvc, cfg.Auth.TokenMaxDays)
 	webhookH := handlers.NewWebhookHandler(webhookSvc)
 	replH := handlers.NewReplicationHandler(replSvc, log)
-	promotionH := handlers.NewPromotionHandler(promotionSvc)
+	promotionH := handlers.NewPromotionHandler(promotionSvc).WithRBAC(repoRepo, rbacSvc)
 	roleH := handlers.NewRoleHandler(roleRepo, userRepo)
 	privH := handlers.NewPrivilegeHandler(privilegeRepo, roleRepo)
 	csH := handlers.NewContentSelectorHandler(selectorSvc)
@@ -477,11 +478,34 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 		authed.GET("/service/rest/v1/assets/:id", func(c *gin.Context) {
 			id := c.Param("id")
 			a, err := assetRepo.Get(c.Request.Context(), id)
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+				return
+			}
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 			if a == nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+				return
+			}
+			// SearchAssets/FilterAssets filter by RBAC; this direct GET by id
+			// didn't, letting any authenticated user who knows or enumerates a
+			// UUID read full metadata and a download URL for an asset in a
+			// private repository. 404 on denial keeps the id unguessable, same
+			// convention ComponentHandler.Get uses (#291).
+			repo, rerr := repoRepo.Get(c.Request.Context(), a.Repository)
+			if rerr != nil || repo == nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+				return
+			}
+			userID, _ := c.Get("userID")
+			roles, _ := c.Get("roles")
+			userIDStr, _ := userID.(string)
+			rolesSlice, _ := roles.([]string)
+			ok, aerr := rbacSvc.CanAccessRepo(c.Request.Context(), userIDStr, rolesSlice, repo, a.Path, "browse")
+			if aerr != nil || !ok {
 				c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
 				return
 			}
