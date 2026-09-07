@@ -1516,3 +1516,48 @@ func TestNexusMigration_AssetListingUnavailable_Tolerated(t *testing.T) {
 	assert.Zero(t, done.ErrorCount)
 	assert.Equal(t, int64(1), done.DoneAssets)
 }
+
+// ── a panicking run must not wedge the job ───────────────────────────────────
+
+// panickingJobs blows up where the runner stamps the job started — the shape
+// of any nil dereference or bad-shape panic inside a detached migration.
+type panickingJobs struct {
+	*testutil.MigrationRepo
+}
+
+func (panickingJobs) SetStarted(_ context.Context, _ string, _ time.Time) error {
+	panic("migration runner blew up")
+}
+
+// safego.Go keeps a panicking run from taking the process down, but the job it
+// left behind said "running" forever — IsActive stops a second run from
+// starting and IsResumable refuses to relaunch it, so the operator holds a job
+// that can neither finish nor be retried. The run has to settle its own record
+// on the way out.
+func TestNexusMigration_RunPanics_JobIsMarkedError(t *testing.T) {
+	fake := &fakeNexus{settings: `[]`}
+	h := newMigHarness(t, fake)
+	h.svc = service.NewNexusMigrationService(service.NexusMigrationConfig{
+		Jobs:          panickingJobs{h.jobs},
+		Repos:         service.NewRepositoryService(h.repos, testutil.NewBlobStoreRepo(), h.blobs, testutil.NewCleanupPolicyRepo()),
+		Users:         h.users,
+		Roles:         h.roles,
+		Privileges:    h.privileges,
+		RoutingRules:  h.rules,
+		Deps:          formats.Deps{Repos: h.repos, Components: h.components, Assets: h.assets, BlobStore: h.blobs, BaseURL: "http://nexspence.test"},
+		JWTSecret:     "unit-test-secret",
+		Log:           zap.NewNop().Sugar(),
+		HTTPClientFor: func(time.Duration) *http.Client { return h.nexus.Client() },
+	})
+
+	job := &domain.MigrationJob{
+		SourceURL: h.nexus.URL, SourceUser: "admin",
+		Status: domain.MigrationPending, MigrateRepos: true,
+	}
+	require.NoError(t, h.svc.Create(context.Background(), job, "s3cret"))
+
+	settled := h.waitForStatus(t, job.ID, domain.MigrationError)
+	require.NotNil(t, settled.LastError)
+	assert.Contains(t, *settled.LastError, "panic")
+	assert.True(t, settled.IsResumable(), "a settled job must be retryable")
+}

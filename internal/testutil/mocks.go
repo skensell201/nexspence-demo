@@ -601,7 +601,11 @@ type AssetRepo struct {
 	// path does a single pass instead of looping.
 	ListStaleCalls int
 	MigrationRows  []domain.MigrationAssetRow
-	Err            error // when non-nil, ListByComponentID/ListByComponentIDs/SearchAssets/SumSizeByRepo return it (500-branch seam)
+	// MigrationListGate, when non-nil, holds ListForBlobStoreMigration until it
+	// is closed, parking a blob-store migration in the "running" state for as
+	// long as the test needs.
+	MigrationListGate chan struct{}
+	Err               error // when non-nil, ListByComponentID/ListByComponentIDs/SearchAssets/SumSizeByRepo return it (500-branch seam)
 	// DeleteErr, when non-nil, makes Delete fail while leaving the row in place —
 	// the seam for "the DB write failed after the bytes were already touched".
 	DeleteErr error
@@ -1165,6 +1169,13 @@ func (a *AssetRepo) ListRawAssetPaths(_ context.Context, repoName string) ([]str
 }
 
 func (a *AssetRepo) ListForBlobStoreMigration(_ context.Context, _, _ string) ([]domain.MigrationAssetRow, error) {
+	// A test that needs the run to still be in flight while it does something
+	// else closes this channel when it is ready to let the run proceed. The
+	// runner reaches this call right after stamping "running", so blocking
+	// here holds the migration in exactly the state a second starter must see.
+	if a.MigrationListGate != nil {
+		<-a.MigrationListGate
+	}
 	return a.MigrationRows, nil
 }
 
