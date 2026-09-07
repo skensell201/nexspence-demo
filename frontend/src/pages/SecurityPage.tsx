@@ -280,6 +280,13 @@ function RolesTab({ roles, loading, onRefresh, admin }: { roles: Role[]; loading
   const [rolePrivCache, setRolePrivCache] = useState<Map<string, Privilege[]>>(new Map())
   const [loadingExpand, setLoadingExpand] = useState<Set<string>>(new Set())
 
+  // Responses are applied in resolution order, not request order: opening
+  // Edit on role A, then closing/opening Edit on role B before A's slower
+  // request resolves, otherwise lets A's late response land after B's fast
+  // one and silently overwrite the checklist the admin is now looking at for
+  // B — the same bug class #337 fixed via vulnReqSeq further down this file.
+  const editReqSeq = useRef(0)
+
   const { data: allSelectors = [] } = useQuery<{ id: string; name: string }[]>({
     queryKey: ['content-selectors'],
     queryFn: () => nexusApi.listContentSelectors().then(r => r.data),
@@ -316,6 +323,7 @@ function RolesTab({ roles, loading, onRefresh, admin }: { roles: Role[]; loading
   }
 
   async function openEdit(r: Role) {
+    const seq = ++editReqSeq.current
     setEditRole(r)
     setEditForm({ name: r.name, description: r.description })
     setLoadingPrivs(true)
@@ -324,9 +332,12 @@ function RolesTab({ roles, loading, onRefresh, admin }: { roles: Role[]; loading
         nexusApi.listPrivileges().then(res => res.data as Privilege[]),
         nexusApi.listRolePrivileges(r.id).then(res => res.data as Privilege[]),
       ])
+      if (seq !== editReqSeq.current) return // superseded by a newer edit
       setAllPrivs(privList)
       setEditPrivIds(rolePrivs.map(p => p.id))
-    } finally { setLoadingPrivs(false) }
+    } finally {
+      if (seq === editReqSeq.current) setLoadingPrivs(false)
+    }
   }
 
   async function openCreate() {
@@ -512,7 +523,7 @@ function RolesTab({ roles, loading, onRefresh, admin }: { roles: Role[]; loading
           onSave={() => saveEdit.mutate()}
           saving={saveEdit.isPending}
           saveDisabled={!editForm.name.trim()}
-          onCancel={() => { setEditRole(null); setEditError(null) }}
+          onCancel={() => { editReqSeq.current++; setEditRole(null); setEditError(null) }}
           onDelete={() => { if (confirm(`Delete role ${editRole.name}?`)) { del.mutate(editRole.id); setEditRole(null) } }}
           error={editError}
         />

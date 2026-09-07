@@ -1915,6 +1915,12 @@ function CreateBlobStoreModal({ blobStores, onClose }: { blobStores: BlobStore[]
   const [err, setErr] = useState('')
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null)
   const [testBusy, setTestBusy] = useState(false)
+  // Bumped by handleTest and by every field onChange that feeds its config.
+  // A field edited after a test started must not let that test's late
+  // response land as if it verified the (now different) config a moment
+  // later — same request-sequence-guard pattern issue 12 applies to
+  // SecurityPage.tsx's openEdit.
+  const testReqSeq = useRef(0)
   const [groupFillPolicy, setGroupFillPolicy] = useState<'round_robin' | 'write_to_first_fill'>('round_robin')
   const [groupMemberIds, setGroupMemberIds] = useState<string[]>([])
 
@@ -1945,6 +1951,7 @@ function CreateBlobStoreModal({ blobStores, onClose }: { blobStores: BlobStore[]
   })
 
   const handleTest = async () => {
+    const seq = ++testReqSeq.current
     setTestBusy(true)
     setTestResult(null)
     try {
@@ -1952,10 +1959,16 @@ function CreateBlobStoreModal({ blobStores, onClose }: { blobStores: BlobStore[]
         ? { path }
         : { bucket, region, endpoint, prefix, access_key: accessKey, secret_key: secretKey }
       const res = await nexusApi.testBlobStore(type === 'group' ? 'local' : type, cfg)
+      if (seq !== testReqSeq.current) return // a field changed since this test started
       setTestResult(res.data)
     } catch {
+      if (seq !== testReqSeq.current) return
       setTestResult({ ok: false, error: 'Request failed' })
     } finally {
+      // Unlike setTestResult above, this must run regardless of seq: nothing
+      // else ever clears testBusy for a superseded request (no new test was
+      // started), so gating it the same way would leave the button stuck
+      // showing "Testing…" forever after an edit invalidates an in-flight one.
       setTestBusy(false)
     }
   }
@@ -1971,44 +1984,44 @@ function CreateBlobStoreModal({ blobStores, onClose }: { blobStores: BlobStore[]
           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--holo-text-dim)', marginBottom: 4, display: 'block' }}>Type</label>
           <Select
             value={type}
-            onChange={v => { setType(v as 'local' | 's3' | 'group'); setTestResult(null) }}
+            onChange={v => { testReqSeq.current++; setType(v as 'local' | 's3' | 'group'); setTestResult(null) }}
             options={[{ value: 'local', label: 'Local filesystem' }, { value: 's3', label: 'S3-compatible' }, { value: 'group', label: 'Group' }]}
           />
         </div>
         {type === 'local' && (
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--holo-text-dim)', marginBottom: 4, display: 'block' }}>Path</label>
-            <HoloInput value={path} onChange={e => setPath(e.target.value)} placeholder="./data/blobs/fast-ssd" />
+            <HoloInput value={path} onChange={e => { testReqSeq.current++; setTestResult(null); setPath(e.target.value) }} placeholder="./data/blobs/fast-ssd" />
           </div>
         )}
         {type === 's3' && (
           <>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--holo-text-dim)', marginBottom: 4, display: 'block' }}>Bucket</label>
-              <HoloInput value={bucket} onChange={e => setBucket(e.target.value)} />
+              <HoloInput value={bucket} onChange={e => { testReqSeq.current++; setTestResult(null); setBucket(e.target.value) }} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--holo-text-dim)', marginBottom: 4, display: 'block' }}>Region</label>
-                <HoloInput value={region} onChange={e => setRegion(e.target.value)} />
+                <HoloInput value={region} onChange={e => { testReqSeq.current++; setTestResult(null); setRegion(e.target.value) }} />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--holo-text-dim)', marginBottom: 4, display: 'block' }}>Prefix (optional)</label>
-                <HoloInput value={prefix} onChange={e => setPrefix(e.target.value)} />
+                <HoloInput value={prefix} onChange={e => { testReqSeq.current++; setTestResult(null); setPrefix(e.target.value) }} />
               </div>
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--holo-text-dim)', marginBottom: 4, display: 'block' }}>Endpoint (leave empty for AWS)</label>
-              <HoloInput value={endpoint} onChange={e => setEndpoint(e.target.value)} placeholder="https://minio.example.com" />
+              <HoloInput value={endpoint} onChange={e => { testReqSeq.current++; setTestResult(null); setEndpoint(e.target.value) }} placeholder="https://minio.example.com" />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--holo-text-dim)', marginBottom: 4, display: 'block' }}>Access Key</label>
-                <HoloInput value={accessKey} onChange={e => setAccessKey(e.target.value)} />
+                <HoloInput value={accessKey} onChange={e => { testReqSeq.current++; setTestResult(null); setAccessKey(e.target.value) }} />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--holo-text-dim)', marginBottom: 4, display: 'block' }}>Secret Key</label>
-                <HoloInput type="password" value={secretKey} onChange={e => setSecretKey(e.target.value)} />
+                <HoloInput type="password" value={secretKey} onChange={e => { testReqSeq.current++; setTestResult(null); setSecretKey(e.target.value) }} />
               </div>
             </div>
           </>

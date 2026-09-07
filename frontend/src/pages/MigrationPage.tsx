@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowRightLeft, Play, Pause, RefreshCw, Plus, PlugZap } from 'lucide-react'
 import { nexspenceApi, apiErrorMessage } from '@/api/client'
@@ -175,10 +175,17 @@ function CreateMigrationModal({ onClose, onCreated }: { onClose: () => void; onC
   const [testing, setTesting] = useState(false)
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [previewError, setPreviewError] = useState('')
+  // Bumped by handleTest and by every field set() feeds into it. A field
+  // edited after a test started must not let that test's late response land
+  // as if it verified the (now different) details a moment later — same
+  // request-sequence-guard pattern issue 12 applies to SecurityPage.tsx's
+  // openEdit.
+  const testReqSeq = useRef(0)
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
     // A connection result belongs to the details it was tested with. Once any
     // of them changes it is stale, and a stale green banner is worse than none.
+    testReqSeq.current++
     setPreview(null)
     setPreviewError('')
     setForm(f => ({ ...f, [k]: e.target.value }))
@@ -190,6 +197,7 @@ function CreateMigrationModal({ onClose, onCreated }: { onClose: () => void; onC
     setUserRealms(r => (r.includes(realm) ? r.filter(x => x !== realm) : [...r, realm]))
 
   const handleTest = async () => {
+    const seq = ++testReqSeq.current
     setPreview(null)
     setPreviewError('')
     setTesting(true)
@@ -199,10 +207,17 @@ function CreateMigrationModal({ onClose, onCreated }: { onClose: () => void; onC
         username: form.username,
         password: form.password,
       })
+      if (seq !== testReqSeq.current) return // a field changed since this test started
       setPreview(data as PreviewResult)
     } catch (err) {
+      if (seq !== testReqSeq.current) return
       setPreviewError(apiErrorMessage(err, 'Could not reach that Nexus'))
     } finally {
+      // Unlike setPreview/setPreviewError above, this must run regardless of
+      // seq: nothing else ever clears testing for a superseded request (no
+      // new test was started), so gating it the same way would leave the
+      // button stuck showing "Testing…" forever after an edit invalidates an
+      // in-flight one.
       setTesting(false)
     }
   }
