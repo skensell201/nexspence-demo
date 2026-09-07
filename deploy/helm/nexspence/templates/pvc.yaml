@@ -1,4 +1,4 @@
-{{- if eq .Values.storage.type "local" }}
+{{- if and (eq .Values.storage.type "local") (not .Values.storage.local.existingClaim) }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -8,7 +8,7 @@ metadata:
     {{- include "nexspence.labels" . | nindent 4 }}
 spec:
   accessModes:
-    - ReadWriteOnce
+    - {{ .Values.storage.local.accessMode }}
   resources:
     requests:
       storage: {{ .Values.storage.local.size }}

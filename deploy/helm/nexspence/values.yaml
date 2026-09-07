@@ -43,7 +43,14 @@ config:
   baseURL: "http://nexspence.example.com"
   logLevel: "info"
   logFormat: "json"
-  httpListen: ":8081"
+  httpAddr: ":8081"
+  # -- Peers (IPs or CIDRs) allowed to set X-Forwarded-For. Every chart
+  # deployment sits behind an ingress/gateway, so leaving this empty (the
+  # app's own default) means the audit log and any IP-based logic only ever
+  # see the ingress's own pod IP, never the real client. Set to the in-cluster
+  # pod CIDR, or "*" to trust every hop (only safe when the server is
+  # unreachable except through a proxy you control).
+  trustedProxies: []
   # -- JWT secret (min 32 chars). Leave empty to auto-generate a unique random
   # secret on first install and persist it across upgrades (recommended). Set an
   # explicit value only if you need to share the secret across clusters.
@@ -88,6 +95,69 @@ config:
       #     docker-hub-proxy.example.com: dockerhub-proxy
       aliases: {}
 
+# -- OIDC single sign-on. Every field below is sensitive (issuer/redirect_url/
+# admin_group name real internal infrastructure and access-control policy) and
+# renders into secret.yaml, not configmap.yaml — only `enabled` is a plain
+# value, since it has to gate templating itself.
+oidc:
+  enabled: false
+  issuer: ""
+  publicIssuerUrl: ""
+  clientId: ""
+  # -- Prefer clientSecretExistingSecret below — a plaintext value here tends
+  # to end up committed to a values file. Uncomment only if you genuinely have
+  # no existing Secret to point at.
+  # clientSecret: ""
+  # -- Reference an existing Secret instead of putting the client secret in
+  # values.
+  clientSecretExistingSecret: ""
+  clientSecretExistingSecretKey: "client-secret"
+  redirectUrl: ""
+  frontendBaseUrl: ""
+  scopes: ["openid", "profile", "email", "groups"]
+  provisioning: "auto"
+  groupsClaim: "groups"
+  adminGroup: ""
+  usernameClaim: "preferred_username"
+  emailClaim: "email"
+  nameClaim: "name"
+  showLoginButton: true
+  cookieSecure: true
+  allowedSkewSeconds: 60
+  # -- Leave empty to auto-generate and persist across upgrades (same pattern
+  # as config.jwtSecret) so an upgrade never rotates it out from under a login
+  # in flight.
+  cookieKey: ""
+
+# -- Redis: backs the distributed lock (cleanup/GC/replication/migration cron
+# coordination across replicas) and the login-attempt rate limiter's shared
+# state. Required once replicaCount > 1 / autoscaling.enabled, or every pod
+# runs its own uncoordinated schedule and rate limiting stops being global.
+redis:
+  enabled: false
+  auth:
+    # -- Prefer existingSecret below — a plaintext value here tends to end up
+    # committed to a values file. Uncomment only if you genuinely have no
+    # existing Secret to point at.
+    # password: ""
+    # -- Reference an existing Secret instead of putting the password in values.
+    existingSecret: ""
+    existingSecretKey: "password"
+
+# -- External Redis (used when redis.enabled=false and you still want the
+# distributed-lock/rate-limiter coordination above)
+externalRedis:
+  enabled: false
+  addr: ""
+  # -- Prefer existingSecret below — a plaintext value here tends to end up
+  # committed to a values file. Uncomment only if you genuinely have no
+  # existing Secret to point at.
+  # password: ""
+  # -- Reference an existing Secret instead of putting the password in values.
+  existingSecret: ""
+  existingSecretKey: "password"
+  db: 0
+
 # -- Blob storage: "local" or "s3"
 storage:
   type: local
@@ -96,13 +166,28 @@ storage:
     # -- PVC size for blob storage
     size: "100Gi"
     storageClass: ""
+    # -- ReadWriteOnce (default) or ReadWriteMany for a shared filesystem
+    # (e.g. AWS EFS via efs-csi) across replicas — LocalBlobStore's writes
+    # (atomic rename, single-writer append) don't depend on POSIX locking, so
+    # RWX is safe.
+    accessMode: "ReadWriteOnce"
+    # -- Bring your own PVC (e.g. a statically-provisioned EFS access point):
+    # when set, the chart skips rendering its own PVC and mounts this claim.
+    existingClaim: ""
   s3:
     # -- Filled when storage.type=s3
     endpoint: ""
     bucket: ""
     region: "us-east-1"
-    accessKey: ""
-    secretKey: ""
+    # -- Prefer existingSecret below — a plaintext value here tends to end up
+    # committed to a values file. Uncomment only if you genuinely have no
+    # existing Secret to point at.
+    # accessKey: ""
+    # secretKey: ""
+    # -- Reference an existing Secret instead of putting the credentials in values.
+    existingSecret: ""
+    existingSecretAccessKeyKey: "access-key"
+    existingSecretSecretKeyKey: "secret-key"
     # -- Path-style addressing (bucket in the path, not the hostname). Required
     # by MinIO and most non-AWS S3 implementations.
     forcePathStyle: true
@@ -111,10 +196,26 @@ storage:
     # every blob, so prefer trusting the CA.
     skipTLSVerify: false
 
+# -- OpenTelemetry distributed tracing (HTTP, DB, blob-store, background jobs,
+# cross-instance replication). Off by default — nexspence ships no trace
+# backend, point otlpEndpoint at whatever collector/Jaeger/Tempo you run.
+tracing:
+  enabled: false
+  otlpEndpoint: "otel-collector:4317"
+  # -- Exporter transport: "grpc" (default, port 4317) or "http" (port 4318)
+  otlpProtocol: "grpc"
+  # -- Send plaintext instead of TLS — for a collector on the same cluster/VPC
+  otlpInsecure: true
+  # -- Head-samples root spans at this ratio (0..1); child spans follow their parent
+  sampleRatio: 0.1
+  serviceName: "nexspence"
+  # -- Distinguishes this deployment's traces (e.g. "prod", "staging") when several share one backend
+  environment: ""
+
 service:
   type: ClusterIP
   port: 80
-  # The container's named port, so the Service follows config.httpListen too.
+  # The container's named port, so the Service follows config.httpAddr too.
   targetPort: http
   annotations: {}
 
@@ -185,8 +286,8 @@ resources:
 # ── Liveness / Readiness probes ───────────────────────────────────────
 livenessProbe:
   httpGet:
-    path: /service/rest/v1/status/check
-    # The container's named port, so the probe follows config.httpListen.
+    path: /healthz
+    # The container's named port, so the probe follows config.httpAddr.
     port: http
   initialDelaySeconds: 20
   periodSeconds: 30
@@ -195,7 +296,7 @@ livenessProbe:
 
 readinessProbe:
   httpGet:
-    path: /service/rest/v1/status/check
+    path: /readyz
     port: http
   initialDelaySeconds: 10
   periodSeconds: 10
@@ -205,6 +306,13 @@ readinessProbe:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# -- Extra volumes/mounts on the main container, e.g. a custom CA bundle
+# Secret/ConfigMap for `database.dsn`'s sslmode=verify-ca/verify-full (which
+# already works at the application level — pgxpool.ParseConfig parses standard
+# libpq syntax — the chart just has nowhere to put the certificate file).
+extraVolumes: []
+extraVolumeMounts: []
 
 # ── PostgreSQL sub-chart (bitnami) ────────────────────────────────────
 # Set enabled: false and provide externalDatabase.dsn for external Postgres.
@@ -228,7 +336,15 @@ postgresql:
 
 # -- External PostgreSQL DSN (used when postgresql.enabled=false)
 externalDatabase:
-  dsn: "postgres://nexspence:nexspence@external-postgres:5432/nexspence?sslmode=disable"
+  # -- Prefer existingSecret below — a plaintext value here (password
+  # included) tends to end up committed to a values file. Uncomment only if
+  # you genuinely have no existing Secret to point at.
+  # dsn: "postgres://nexspence:nexspence@external-postgres:5432/nexspence?sslmode=disable"
+  # -- Reference an existing Secret instead of putting the DSN directly in
+  # values. When set, the chart never composes NEXSPENCE_DATABASE_DSN itself —
+  # the Deployment reads it straight from this Secret via secretKeyRef.
+  existingSecret: ""
+  existingSecretKey: "dsn"
 
 # Image scanning (Trivy).
 #

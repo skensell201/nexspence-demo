@@ -75,16 +75,50 @@ PostgreSQL DSN — either external or bitnami sub-chart.
 {{- end }}
 
 {{/*
-The port the server actually listens on, taken from config.httpListen
-(":8081", "0.0.0.0:8081"). The containerPort and both probes read it from
-here, so changing httpListen moves all three together instead of leaving the
-pod pointing at a port nothing serves.
+Redis mutual-exclusion guard — bundled and external are not both allowed.
+*/}}
+{{- define "nexspence.redisInUse" -}}
+{{- if and .Values.redis.enabled .Values.externalRedis.enabled }}
+{{- fail "only one of redis.enabled / externalRedis.enabled may be true" }}
+{{- end }}
+{{- end }}
+
+{{- define "nexspence.redisAddr" -}}
+{{- include "nexspence.redisInUse" . }}
+{{- if .Values.redis.enabled }}
+{{- printf "%s-redis-master:6379" .Release.Name }}
+{{- else }}
+{{- .Values.externalRedis.addr }}
+{{- end }}
+{{- end }}
+
+{{- define "nexspence.redisPassword" -}}
+{{- if .Values.redis.enabled }}
+{{- .Values.redis.auth.password }}
+{{- else }}
+{{- .Values.externalRedis.password }}
+{{- end }}
+{{- end }}
+
+{{- define "nexspence.redisDB" -}}
+{{- if .Values.redis.enabled }}
+{{- 0 }}
+{{- else }}
+{{- .Values.externalRedis.db }}
+{{- end }}
+{{- end }}
+
+{{/*
+The port the server actually listens on, taken from config.httpAddr
+(":8081", "0.0.0.0:8081"). The containerPort, both probes and the Service
+read it from here, so changing httpAddr moves all of them together instead
+of leaving the pod pointing at a port nothing serves.
 */}}
 {{- define "nexspence.httpPort" -}}
-{{- $listen := default ":8081" .Values.config.httpListen -}}
+{{- $listen := default ":8081" .Values.config.httpAddr -}}
 {{- $port := last (splitList ":" $listen) -}}
 {{- if not (regexMatch "^[0-9]+$" $port) -}}
-{{- fail (printf "config.httpListen %q has no port; expected something like \":8081\"" $listen) -}}
+{{- fail (printf "config.httpAddr %q has no port; expected something like \":8081\"" $listen) -}}
 {{- end -}}
 {{- $port -}}
 {{- end }}

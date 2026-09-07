@@ -6,12 +6,17 @@ metadata:
   labels:
     {{- include "nexspence.labels" . | nindent 4 }}
 data:
-  # storage.s3 aside, this is the third env name the chart got wrong:
-  # the config key is http.addr, so NEXSPENCE_HTTP_LISTEN matched nothing
-  # and config.httpListen was inert — the server simply stayed on its
-  # own :8081 default, which is why nobody noticed.
-  NEXSPENCE_HTTP_ADDR: {{ .Values.config.httpListen | quote }}
+  # config.httpAddr used to go out as NEXSPENCE_HTTP_LISTEN, which matches no
+  # config key (the real one is http.addr), so the value was inert and the
+  # server stayed on its own :8081 default — the same default the chart ships,
+  # which is why nobody noticed. scripts/check-helm-env.py guards the class.
+  NEXSPENCE_HTTP_ADDR: {{ .Values.config.httpAddr | quote }}
   NEXSPENCE_HTTP_BASE_URL: {{ .Values.config.baseURL | quote }}
+  {{- if .Values.config.trustedProxies }}
+  # Comma-separated; viper's default mapstructure decode hook splits a
+  # []string env override on "," (config_test.go:TestLoad_TrustedProxies_EnvOverride).
+  NEXSPENCE_HTTP_TRUSTED_PROXIES: {{ .Values.config.trustedProxies | join "," | quote }}
+  {{- end }}
   NEXSPENCE_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
   NEXSPENCE_LOG_FORMAT: {{ .Values.config.logFormat | quote }}
   NEXSPENCE_AUTH_JWT_EXPIRY_HOURS: {{ .Values.config.jwtExpiryHours | quote }}
@@ -23,6 +28,28 @@ data:
   NEXSPENCE_METRICS_PUBLIC: {{ .Values.config.metricsPublic | quote }}
   NEXSPENCE_DOCKER_SUBDOMAIN_CONNECTOR_ENABLED: {{ .Values.config.docker.subdomainConnector.enabled | quote }}
   NEXSPENCE_DOCKER_SUBDOMAIN_CONNECTOR_BASE_DOMAIN: {{ .Values.config.docker.subdomainConnector.baseDomain | quote }}
+  NEXSPENCE_TRACING_ENABLED: {{ .Values.tracing.enabled | quote }}
+  {{- if .Values.tracing.enabled }}
+  NEXSPENCE_TRACING_OTLP_ENDPOINT: {{ .Values.tracing.otlpEndpoint | quote }}
+  NEXSPENCE_TRACING_OTLP_PROTOCOL: {{ .Values.tracing.otlpProtocol | quote }}
+  NEXSPENCE_TRACING_OTLP_INSECURE: {{ .Values.tracing.otlpInsecure | quote }}
+  NEXSPENCE_TRACING_SAMPLE_RATIO: {{ .Values.tracing.sampleRatio | quote }}
+  NEXSPENCE_TRACING_SERVICE_NAME: {{ .Values.tracing.serviceName | quote }}
+  NEXSPENCE_TRACING_ENVIRONMENT: {{ .Values.tracing.environment | quote }}
+  {{- end }}
+  NEXSPENCE_OIDC_ENABLED: {{ .Values.oidc.enabled | quote }}
+  {{- if or .Values.redis.enabled .Values.externalRedis.enabled }}
+  NEXSPENCE_REDIS_ENABLED: "true"
+  NEXSPENCE_REDIS_ADDR: {{ include "nexspence.redisAddr" . | quote }}
+  NEXSPENCE_REDIS_DB: {{ include "nexspence.redisDB" . | quote }}
+  {{- else }}
+  NEXSPENCE_REDIS_ENABLED: "false"
+  {{- end }}
+  # storage.default_type is the one setting that actually tells the app which
+  # backend to use — emitting only the type-specific block below and never
+  # this key meant storage.type: s3 in values had zero effect on the running
+  # app, which stayed on "local" (its own default) regardless.
+  NEXSPENCE_STORAGE_DEFAULT_TYPE: {{ .Values.storage.type | quote }}
   {{- if eq .Values.storage.type "local" }}
   NEXSPENCE_STORAGE_LOCAL_BASE_PATH: {{ .Values.storage.local.mountPath | quote }}
   {{- else if eq .Values.storage.type "s3" }}

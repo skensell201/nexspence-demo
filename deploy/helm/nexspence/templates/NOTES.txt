@@ -10,7 +10,7 @@ Nexspence has been deployed!
   Check the cilium Gateway external IP:
   kubectl get gateway {{ include "nexspence.fullname" . }}-cilium -n {{ .Release.Namespace }}
 {{- else }}
-  kubectl port-forward svc/{{ include "nexspence.fullname" . }} 8081:8081
+  kubectl port-forward svc/{{ include "nexspence.fullname" . }} 8081:{{ .Values.service.port }}
   http://localhost:8081
 {{- end }}
 
