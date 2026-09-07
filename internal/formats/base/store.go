@@ -632,14 +632,7 @@ func resolveBlobStoreObj(ctx context.Context, d formats.Deps, repo *domain.Repos
 			return nil, fmt.Errorf("blob store id %q not found", ref)
 		}
 	}
-	bs, err := d.Blobs.Get(ctx, "default")
-	if errors.Is(err, repository.ErrNotFound) {
-		return nil, fmt.Errorf("default blob store not found")
-	}
-	if err != nil {
-		return nil, fmt.Errorf("blob store: %w", err)
-	}
-	return bs, nil
+	return repository.DefaultBlobStore(ctx, d.Blobs)
 }
 
 // ResolveBlobStore returns the physical BlobStore, its DB id, and its DB name for repo.
@@ -727,12 +720,9 @@ func resolveBlobStoreRef(ctx context.Context, d formats.Deps, repo *domain.Repos
 		}
 	}
 	if bs == nil {
-		bs, err = d.Blobs.Get(ctx, "default")
+		bs, err = repository.DefaultBlobStore(ctx, d.Blobs)
 		if err != nil {
-			return "", "", fmt.Errorf("blob store: %w", err)
-		}
-		if bs == nil {
-			return "", "", fmt.Errorf("default blob store not found (seed blob_stores or assign repository.blobStoreId)")
+			return "", "", err
 		}
 	}
 
