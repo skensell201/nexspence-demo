@@ -112,6 +112,12 @@ spec:
               mountPath: /opt/trivy
               readOnly: true
             {{- end }}
+            {{- if .Values.config.docker.subdomainConnector.aliases }}
+            - name: config-file
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            {{- end }}
       volumes:
         # Writable scratch dirs (rootfs is read-only). The trivy cache lives at
         # /app/.cache (HOME=/app, TRIVY_CACHE_DIR=/app/.cache/trivy in the image).
@@ -119,6 +125,11 @@ spec:
           emptyDir: {}
         - name: cache
           emptyDir: {}
+        {{- if .Values.config.docker.subdomainConnector.aliases }}
+        - name: config-file
+          configMap:
+            name: {{ include "nexspence.fullname" . }}-file
+        {{- end }}
         {{- if eq .Values.storage.type "local" }}
         - name: blobs
           persistentVolumeClaim:

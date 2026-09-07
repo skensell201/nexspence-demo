@@ -129,22 +129,81 @@ helm install nexspence \
 
 ## S3 / MinIO Blob Store
 
-Set `config.storage.defaultType=s3` and provide bucket + endpoint. Use this
+Set `storage.type=s3` and provide bucket + endpoint. Use this
 for any multi-replica deployment — a single `ReadWriteOnce` PVC does not scale
 horizontally.
 
 ```bash
 helm install nexspence \
   deploy/helm/nexspence \
-  --set config.storage.defaultType=s3 \
-  --set config.storage.s3.endpoint="https://minio.example.com" \
-  --set config.storage.s3.bucket="nexspence-blobs" \
-  --set config.storage.s3.accessKey="minio" \
-  --set config.storage.s3.secretKey="minio123" \
+  --set storage.type=s3 \
+  --set storage.s3.endpoint="https://minio.example.com" \
+  --set storage.s3.bucket="nexspence-blobs" \
+  --set storage.s3.accessKey="minio" \
+  --set storage.s3.secretKey="minio123" \
   -f deploy/helm/nexspence/values-examples/nginx.yaml \
   --namespace nexspence \
   --create-namespace
 ```
+
+---
+
+## Docker Subdomain Connector
+
+Serves each Docker repository on its own hostname, so clients can
+`docker pull myrepo.example.com/alpine` instead of
+`docker pull nexspence.example.com:8081/repository/myrepo/alpine`. See
+[docs/docker-subdomain-connector.md](../../../docs/docker-subdomain-connector.md)
+for the full picture.
+
+```bash
+helm install nexspence \
+  deploy/helm/nexspence \
+  --set config.docker.subdomainConnector.enabled=true \
+  --set config.docker.subdomainConnector.baseDomain="nexspence.example.com" \
+  --namespace nexspence
+```
+
+Two things the chart cannot do for you:
+
+- **Wildcard DNS.** `*.nexspence.example.com` has to resolve to the ingress.
+- **The `Host` header.** The connector routes on it, so the ingress must pass
+  the client's original hostname through rather than rewriting it. Add a
+  wildcard host to `ingress.hosts` (and to the TLS certificate) — with nginx
+  the default `proxy_set_header Host $host` is already right; Traefik and Istio
+  preserve it too.
+
+```yaml
+ingress:
+  enabled: true
+  hosts:
+    - host: nexspence.example.com
+      paths: [{ path: /, pathType: Prefix }]
+    - host: "*.nexspence.example.com"
+      paths: [{ path: /, pathType: Prefix }]
+```
+
+### Hostname aliases
+
+When a DNS name does not match the repository behind it — a Nexus connector
+port being migrated, say — map it explicitly. Any domain works; the hostname
+does not have to sit under `baseDomain`:
+
+```yaml
+config:
+  docker:
+    subdomainConnector:
+      enabled: true
+      baseDomain: "nexspence.example.com"
+      aliases:
+        docker-hub-proxy.example.com: dockerhub-proxy
+        hub.nexspence.example.com: dockerhub-proxy
+```
+
+A YAML map has no environment-variable spelling, so setting any alias makes the
+chart mount a small config file over the image's `/app/config.yaml`. Every other
+setting still arrives as an environment variable, which viper reads last, so
+nothing else in the chart changes behaviour.
 
 ---
 

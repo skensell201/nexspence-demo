@@ -68,6 +68,25 @@ config:
   # the cluster network reaches the Service and a scrape token would just be one
   # more secret to rotate.
   metricsPublic: false
+  # -- Docker subdomain connector: serve each Docker repository on its own
+  # hostname, so clients can `docker pull myrepo.example.com/alpine` instead of
+  # `docker pull nexspence.example.com:8081/repository/myrepo/alpine`. Needs a
+  # wildcard DNS record for baseDomain and an ingress that passes the original
+  # Host header through — see docs/docker-subdomain-connector.md.
+  docker:
+    subdomainConnector:
+      enabled: false
+      # -- The domain the "<repo>.<baseDomain>" hostnames sit under. Optional
+      # when only aliases are used.
+      baseDomain: ""
+      # -- Hostname → repository name, for DNS names that do not match the
+      # repository (a Nexus connector port being migrated, say). Any domain
+      # works; the hostname does not have to sit under baseDomain. Setting any
+      # alias mounts a small config file into the container, because a YAML map
+      # cannot be expressed as an environment variable.
+      #   aliases:
+      #     docker-hub-proxy.example.com: dockerhub-proxy
+      aliases: {}
 
 # -- Blob storage: "local" or "s3"
 storage:
