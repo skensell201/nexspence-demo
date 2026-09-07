@@ -405,6 +405,12 @@ reads, and search. A repository the caller may not see answers `404`, not
 deletes, `/api/v1/me`, tokens, scan results, and the whole admin surface —
 still requires a token.
 
+The UI asks for that signed-in-only data (blob-store names, repository quota,
+the caller's privileges, scan results) only while a session exists, and offers
+promotion and bulk selection only then. A `401` is treated as an expired
+session — clearing it and returning to `/login` — only when the request
+carried a token; a visitor who never had one is left on the page.
+
 The Docker `/v2/` handshake itself is unconditional: an unauthenticated ping
 always answers `401` with a `Bearer` challenge pointing at `/v2/token`.
 Clients with credentials trade them there for a user token (this is the

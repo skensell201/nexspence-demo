@@ -32,13 +32,19 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
-// Redirect to login on 401, but NOT when the 401 comes from the login endpoint itself
-// (otherwise the error never reaches the form and "nothing happens").
+// A 401 means "sign in" only when the request carried a token that the server
+// refused — the session expired or was revoked — so clear it and go to /login.
+// A signed-out visitor browsing public repositories (#404) has no session to
+// lose: a 401 there is just a resource they cannot read, and bouncing them to
+// the login wall would undo the anonymous UI. NOT when the 401 comes from the
+// login endpoint itself (otherwise the error never reaches the form and
+// "nothing happens").
 apiClient.interceptors.response.use(
   (r) => r,
   (err) => {
     const url: string = err.config?.url ?? ''
-    if (err.response?.status === 401 && !url.endsWith('/login')) {
+    const presentedToken = Boolean(err.config?.headers?.Authorization)
+    if (err.response?.status === 401 && presentedToken && !url.endsWith('/login')) {
       localStorage.removeItem('nexspence_token')
       window.location.href = '/login'
     }
