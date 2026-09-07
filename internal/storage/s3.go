@@ -207,9 +207,29 @@ func (s *S3BlobStore) ListKeys(ctx context.Context) ([]string, error) {
 	return keys, nil
 }
 
+// blobKeyFromObjectKey reverses objectKey's two-level sharding:
+// "ab/cd/abcdef..." → "abcdef...".
+func blobKeyFromObjectKey(objKey string) string {
+	parts := strings.SplitN(objKey, "/", 3)
+	if len(parts) == 3 {
+		return parts[2]
+	}
+	return objKey
+}
+
 // ListEntries returns every object's blob key, size and last-modified time.
 func (s *S3BlobStore) ListEntries(ctx context.Context) ([]BlobEntry, error) {
 	var entries []BlobEntry
+	// A chunked OCI upload session's real activity — every AppendBlob call —
+	// only ever rewrites the .append-meta side-object (saveAppendState),
+	// never the plain placeholder Put that create() makes at session start.
+	// Left alone, an entry's ModTime stays pinned to session start no matter
+	// how recently a chunk landed, and GC's min_age grace period can abort a
+	// session that is still actively receiving data. Track each key's most
+	// recent .append-meta ModTime here (still excluded from the returned
+	// entries themselves) and use it below when it postdates the
+	// placeholder's own.
+	metaModTimes := make(map[string]time.Time)
 	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucket),
 	})
@@ -219,14 +239,20 @@ func (s *S3BlobStore) ListEntries(ctx context.Context) ([]BlobEntry, error) {
 			return entries, fmt.Errorf("s3 list entries: %w", err)
 		}
 		for _, obj := range page.Contents {
-			if obj.Key == nil || isAppendMetaObject(*obj.Key) {
+			if obj.Key == nil {
 				continue
 			}
-			parts := strings.SplitN(*obj.Key, "/", 3)
-			key := *obj.Key
-			if len(parts) == 3 {
-				key = parts[2]
+			if isAppendMetaObject(*obj.Key) {
+				if obj.LastModified == nil {
+					continue
+				}
+				key := blobKeyFromObjectKey(strings.TrimSuffix(*obj.Key, s3AppendMetaSuffix))
+				if mt := *obj.LastModified; mt.After(metaModTimes[key]) {
+					metaModTimes[key] = mt
+				}
+				continue
 			}
+			key := blobKeyFromObjectKey(*obj.Key)
 			var size int64
 			if obj.Size != nil {
 				size = *obj.Size
@@ -236,6 +262,14 @@ func (s *S3BlobStore) ListEntries(ctx context.Context) ([]BlobEntry, error) {
 				mt = *obj.LastModified
 			}
 			entries = append(entries, BlobEntry{Key: key, Size: size, ModTime: mt})
+		}
+	}
+	// A page split between a placeholder and its .append-meta companion (list
+	// order is lexicographic, not paired) means the correlation can only
+	// happen once every page has been seen.
+	for i := range entries {
+		if mt, ok := metaModTimes[entries[i].Key]; ok && mt.After(entries[i].ModTime) {
+			entries[i].ModTime = mt
 		}
 	}
 	return entries, nil

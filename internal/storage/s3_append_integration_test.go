@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -281,6 +282,54 @@ func TestS3BlobStore_AppendState_HiddenFromListings(t *testing.T) {
 	for _, e := range entries {
 		assert.NotContains(t, e.Key, ".append-meta", "append bookkeeping must not list as a blob")
 	}
+}
+
+// GC's min_age grace period reads ListEntries' ModTime for a key. An OCI
+// chunked upload session starts with a real empty placeholder Put at the
+// blob key (mirroring oci.uploadStore.create) — separate from whatever
+// AppendBlob's own multipart machinery does later. Every subsequent chunk
+// only ever rewrites the .append-meta side-object; without correlating it,
+// ListEntries reports the placeholder's frozen session-start ModTime no
+// matter how recently a chunk landed, and a long/slow upload can be aborted
+// by GC purely because it has been open a while.
+func TestS3BlobStore_ListEntries_TracksMostRecentAppendActivity(t *testing.T) {
+	bs := minioPool(t)
+	as := s3Appendable(t, bs)
+	ctx := context.Background()
+	key := "ap99aaaa88889999"
+
+	require.NoError(t, bs.Put(ctx, key, bytes.NewReader(nil), 0))
+	t.Cleanup(func() { _ = as.AbortAppend(ctx, key) })
+
+	entriesAtStart, err := bs.ListEntries(ctx)
+	require.NoError(t, err)
+	startModTime := findEntry(t, entriesAtStart, key).ModTime
+
+	time.Sleep(1200 * time.Millisecond)
+
+	// A real chunk landing well after session start — the same shape an
+	// in-progress, slow OCI upload would produce.
+	_, err = as.AppendBlob(ctx, key, bytes.NewReader([]byte("late chunk")))
+	require.NoError(t, err)
+
+	entriesAfter, err := bs.ListEntries(ctx)
+	require.NoError(t, err)
+	afterModTime := findEntry(t, entriesAfter, key).ModTime
+
+	assert.True(t, afterModTime.After(startModTime),
+		"ListEntries ModTime should track the most recent AppendBlob activity, not stay pinned to session start (start=%v after=%v)", startModTime, afterModTime)
+	assert.GreaterOrEqual(t, afterModTime.Sub(startModTime), 900*time.Millisecond)
+}
+
+func findEntry(t *testing.T, entries []storage.BlobEntry, key string) storage.BlobEntry {
+	t.Helper()
+	for _, e := range entries {
+		if e.Key == key {
+			return e
+		}
+	}
+	t.Fatalf("entry %q not found in ListEntries result", key)
+	return storage.BlobEntry{}
 }
 
 // Deleting a key mid-session is how GC collects an abandoned upload, and it has
