@@ -602,18 +602,18 @@ func (s *PromotionService) resolveStore(ctx context.Context, blobStoreID *string
 	var bsMeta *domain.BlobStore
 	var err error
 	if implicit {
-		bsMeta, err = s.blobRepo.Get(ctx, "default")
+		bsMeta, err = repository.DefaultBlobStore(ctx, s.blobRepo)
+		if err != nil {
+			return nil, "", err
+		}
 	} else {
 		bsMeta, err = s.blobRepo.GetByID(ctx, *blobStoreID)
-	}
-	if errors.Is(err, repository.ErrNotFound) || (err == nil && bsMeta == nil) {
-		if implicit {
-			return nil, "", fmt.Errorf("default blob store not found (seed blob_stores or assign repository.blobStoreId)")
+		if errors.Is(err, repository.ErrNotFound) || (err == nil && bsMeta == nil) {
+			return nil, "", fmt.Errorf("blob store id %q not found", *blobStoreID)
 		}
-		return nil, "", fmt.Errorf("blob store id %q not found", *blobStoreID)
-	}
-	if err != nil {
-		return nil, "", fmt.Errorf("blob store: %w", err)
+		if err != nil {
+			return nil, "", fmt.Errorf("blob store: %w", err)
+		}
 	}
 	bs, err := s.blobResolver.Get(ctx, storage.BlobStoreDescriptor{
 		ID:     bsMeta.ID,

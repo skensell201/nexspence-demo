@@ -372,3 +372,62 @@ func TestStoreArtifact_GroupStore_DefaultFillPolicy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "dfp-member-a", result.Asset.BlobStoreID)
 }
+
+// ── Implicit blob store when none is named "default" ──────────
+
+// An operator who deletes the seeded stores and keeps a single store of their
+// own ("minio", say) leaves every repository pointing at no blob store at all.
+// Uploading to one used to fail with "default blob store not found" (#402);
+// the only configured store is now what an implicit reference means.
+func TestStoreArtifact_NoDefaultStore_UsesTheOnlyOne(t *testing.T) {
+	repo := testutil.SimpleRepo("raw-hosted", "raw")
+	blobStore := testutil.NewBlobStore()
+	d := formats.Deps{
+		Repos:      testutil.NewRepoRepo(repo),
+		Blobs:      testutil.NewBlobStoreRepo(&domain.BlobStore{ID: "bs-minio", Name: "minio", Type: "s3"}),
+		Components: testutil.NewComponentRepo(),
+		Assets:     testutil.NewAssetRepo(),
+		BlobStore:  blobStore,
+		Registry:   storage.NewRegistry(blobStore),
+		BaseURL:    "http://localhost",
+	}
+
+	content := "artifact bytes"
+	_, err := base.StoreArtifact(context.Background(), d,
+		"raw-hosted", "/dir/file.txt", "text/plain",
+		base.Coords{Group: "/dir", Name: "file.txt", Version: "1.0"},
+		strings.NewReader(content), int64(len(content)))
+	require.NoError(t, err)
+
+	assets, err := d.Assets.ListByRepoAndPath(context.Background(), "raw-hosted", "")
+	require.NoError(t, err)
+	require.NotEmpty(t, assets)
+	assert.Equal(t, "bs-minio", assets[0].BlobStoreID)
+}
+
+// Several stores and none named "default" is ambiguous, and picking one at
+// random would scatter blobs. The write fails, and the message says what to do.
+func TestStoreArtifact_SeveralStoresNoDefault_FailsWithGuidance(t *testing.T) {
+	repo := testutil.SimpleRepo("raw-hosted", "raw")
+	blobStore := testutil.NewBlobStore()
+	d := formats.Deps{
+		Repos: testutil.NewRepoRepo(repo),
+		Blobs: testutil.NewBlobStoreRepo(
+			&domain.BlobStore{ID: "bs-minio", Name: "minio", Type: "s3"},
+			&domain.BlobStore{ID: "bs-cold", Name: "cold", Type: "s3"},
+		),
+		Components: testutil.NewComponentRepo(),
+		Assets:     testutil.NewAssetRepo(),
+		BlobStore:  blobStore,
+		Registry:   storage.NewRegistry(blobStore),
+		BaseURL:    "http://localhost",
+	}
+
+	content := "artifact bytes"
+	_, err := base.StoreArtifact(context.Background(), d,
+		"raw-hosted", "/dir/file.txt", "text/plain",
+		base.Coords{Group: "/dir", Name: "file.txt", Version: "1.0"},
+		strings.NewReader(content), int64(len(content)))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "assign repository.blobStoreId")
+}
