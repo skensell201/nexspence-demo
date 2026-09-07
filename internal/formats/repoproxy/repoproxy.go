@@ -174,6 +174,18 @@ func applyChecksumHeaders(c *gin.Context, a *domain.Asset) {
 // addressed by digest) are never revalidated — callers pass maxAge == 0 for those.
 const DefaultMetadataMaxAge = 10 * time.Minute
 
+// maxRewrittenMetadataBytes caps storeAndServeResponse's and
+// serveCachedAsset's buffered io.ReadAll — the only unbounded reads in this
+// codebase, both gated on rewrite != nil (npm packuments, PyPI simple pages,
+// NuGet registration/flatcontainer indexes: the shared path any proxy that
+// rewrites a response before serving it goes through). Every other metadata
+// read here (OCI manifests/referrers, npm's own age-filter packument read,
+// PyPI's simple index reader, RubyGems gemspecs) already caps its ReadAll
+// with a LimitReader; this was the one exception, reachable from any proxy
+// repository whose remote_url a caller can point at a hostile, compromised,
+// or simply oversized-by-accident upstream.
+const maxRewrittenMetadataBytes = 32 << 20
+
 // MetadataMaxAge returns the freshness TTL to use for proxied metadata on this
 // repository. It reads proxy_config["metadata_max_age"], interpreted as a number
 // of seconds (JSON numbers arrive as float64; strings are parsed). Any unset,
@@ -295,9 +307,17 @@ func serveCachedAsset(c *gin.Context, d formats.Deps, asset *domain.Asset, rc io
 		return
 	}
 	if rewrite != nil {
-		body, err := io.ReadAll(rc)
+		// Reading one byte past the cap is what makes an overflow visible: a
+		// reader limited to exactly the cap returns the trimmed prefix and a
+		// nil error, which would rewrite (and serve) a silently truncated
+		// document instead of rejecting it.
+		body, err := io.ReadAll(io.LimitReader(rc, maxRewrittenMetadataBytes+1))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "cache read: " + err.Error()})
+			return
+		}
+		if len(body) > maxRewrittenMetadataBytes {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "cached metadata exceeds the rewrite size limit"})
 			return
 		}
 		c.Data(http.StatusOK, asset.ContentType, rewrite(body))
@@ -545,9 +565,15 @@ func storeAndServeResponse(c *gin.Context, d formats.Deps, repo *domain.Reposito
 	// ORIGINAL to the cache (hashes over the original), and serve the client
 	// the transformed copy. Metadata documents are small, so buffering is fine.
 	if rewrite != nil {
-		body, readErr := io.ReadAll(resp.Body)
+		// Same cap and +1 trick as serveCachedAsset's re-read below: a
+		// hostile, compromised, or simply oversized-by-accident upstream
+		// otherwise buffers without limit before any quota/size check runs.
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxRewrittenMetadataBytes+1))
 		if readErr != nil {
 			return fmt.Errorf("proxy metadata read: %w", readErr)
+		}
+		if len(body) > maxRewrittenMetadataBytes {
+			return fmt.Errorf("proxy metadata exceeds the %d byte rewrite size limit", maxRewrittenMetadataBytes)
 		}
 		if err := storeOriginal(ctx, c, d, repo, repoRelativePath, ct, coords, body); err != nil {
 			return err
