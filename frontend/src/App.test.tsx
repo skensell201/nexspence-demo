@@ -39,10 +39,25 @@ describe('App', () => {
     })
   })
 
-  it('does not render the protected layout for an unauthenticated user (PrivateRoute guard)', async () => {
+  it('lets an unauthenticated visitor reach the repositories page', async () => {
     renderApp('/repositories')
-    // PrivateRoute redirects guests away from the Layout; the sidebar nav
-    // (e.g. "Cleanup Policies") must never appear.
+    // Browsing public repositories without signing in is the point of #404:
+    // the shell renders, and the sidebar offers a way in instead of a user pill.
+    expect((await screen.findAllByText('Browse')).length).toBeGreaterThan(0)
+    expect(screen.getByText('Not signed in')).toBeInTheDocument()
+  })
+
+  it('keeps an unauthenticated visitor out of the admin pages', async () => {
+    renderApp('/cleanup')
+    // PrivateRoute still guards everything that is not a public read, so the
+    // page itself never mounts — its <h1> is the thing to look for, not the
+    // sidebar label of the same name (which is admin-gated separately).
+    await Promise.resolve()
+    expect(screen.queryByRole('heading', { name: 'Cleanup Policies' })).not.toBeInTheDocument()
+  })
+
+  it('hides the system nav from an unauthenticated visitor', async () => {
+    renderApp('/repositories')
     await Promise.resolve()
     expect(screen.queryByText('Cleanup Policies')).not.toBeInTheDocument()
   })

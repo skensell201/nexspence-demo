@@ -54,6 +54,12 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Repositories, Browse, Search and Docs render for a signed-out visitor too:
+// the read endpoints behind them answer anonymously, and the server returns
+// only repositories with allow_anonymous (and only while
+// auth.anonymous_enabled is on), so a closed instance shows an empty list
+// instead of a login wall (#404). Everything else stays behind PrivateRoute.
+
 export default function App() {
   const init = useAuthStore(s => s.init)
   useEffect(() => { init() }, [init])
@@ -64,14 +70,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/oidc/callback" element={<OIDCCallbackPage />} />
         <Route path="/saml/callback" element={<SAMLCallbackPage />} />
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <Layout />
-            </PrivateRoute>
-          }
-        >
+        <Route path="/" element={<Layout />}>
           <Route index element={<Navigate to="/repositories" replace />} />
           <Route path="repositories" element={<RepositoriesPage />} />
           <Route
@@ -93,42 +92,42 @@ export default function App() {
           <Route
             path="users"
             element={
-              <ErrorBoundary><Suspense fallback={<PageSkeleton />}>
+              <PrivateRoute><ErrorBoundary><Suspense fallback={<PageSkeleton />}>
                 <UsersPage />
-              </Suspense></ErrorBoundary>
+              </Suspense></ErrorBoundary></PrivateRoute>
             }
           />
           <Route
             path="cleanup"
             element={
-              <ErrorBoundary><Suspense fallback={<PageSkeleton />}>
+              <PrivateRoute><ErrorBoundary><Suspense fallback={<PageSkeleton />}>
                 <CleanupPage />
-              </Suspense></ErrorBoundary>
+              </Suspense></ErrorBoundary></PrivateRoute>
             }
           />
           <Route
             path="admin"
             element={
-              <ErrorBoundary><Suspense fallback={<PageSkeleton />}>
+              <PrivateRoute><ErrorBoundary><Suspense fallback={<PageSkeleton />}>
                 <AdminPage />
-              </Suspense></ErrorBoundary>
+              </Suspense></ErrorBoundary></PrivateRoute>
             }
           />
           <Route path="migration" element={<Navigate to="/admin?tab=migration" replace />} />
           <Route
             path="security"
             element={
-              <ErrorBoundary><Suspense fallback={<PageSkeleton />}>
+              <PrivateRoute><ErrorBoundary><Suspense fallback={<PageSkeleton />}>
                 <SecurityPage />
-              </Suspense></ErrorBoundary>
+              </Suspense></ErrorBoundary></PrivateRoute>
             }
           />
           <Route
             path="audit"
             element={
-              <ErrorBoundary><Suspense fallback={<PageSkeleton />}>
+              <PrivateRoute><ErrorBoundary><Suspense fallback={<PageSkeleton />}>
                 <AuditPage />
-              </Suspense></ErrorBoundary>
+              </Suspense></ErrorBoundary></PrivateRoute>
             }
           />
           <Route path="monitoring" element={<Navigate to="/admin?tab=monitoring" replace />} />

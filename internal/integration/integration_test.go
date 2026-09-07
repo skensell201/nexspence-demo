@@ -82,6 +82,11 @@ func server(t *testing.T) *httptest.Server {
 		cfg.Bootstrap.AdminUsername = "admin"
 		cfg.Bootstrap.AdminPassword = "admin123"
 		cfg.Bootstrap.AdminEmail = "admin@test.local"
+		// Production's default. It is the instance-wide half of the anonymous
+		// switch; without it every allow_anonymous repository still refuses an
+		// unauthenticated read, and the public-read tests below would pass for
+		// the wrong reason.
+		cfg.Auth.AnonymousEnabled = true
 
 		log := logger.New("error", "json")
 		handler := api.NewRouter(context.Background(), cfg, pool, log, "integration-test")
@@ -301,4 +306,98 @@ func TestMetricsEndpoint(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&snap))
 	assert.Contains(t, snap, "requests_total")
 	assert.Contains(t, snap, "uptime_seconds")
+}
+
+// ── Anonymous browsing (#404) ─────────────────────────────────
+
+// anonReq issues a request with no Authorization header at all.
+func anonReq(t *testing.T, path string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, server(t).URL+path, nil)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	return resp
+}
+
+// Nexus lets a visitor browse public repositories without signing in, and the
+// read endpoints the web UI is built on refused an unauthenticated caller with
+// a 401 before this — so the UI had no choice but to gate everything behind a
+// login. They now run OptionalAuth and let RBAC decide, which means a
+// repository is visible anonymously only when it carries allow_anonymous.
+func TestAnonymousBrowse_SeesOnlyPublicRepositories(t *testing.T) {
+	token := login(t, "admin", "admin123")
+
+	for _, r := range []struct {
+		name string
+		anon bool
+	}{{"anon-public", true}, {"anon-private", false}} {
+		body := fmt.Sprintf(
+			`{"name":%q,"online":true,"allowAnonymous":%t,"storage":{"blobStoreName":"default","strictContentTypeValidation":false}}`,
+			r.name, r.anon)
+		resp := authReq(t, http.MethodPost, "/service/rest/v1/repositories/raw/hosted",
+			bytes.NewBufferString(body), token)
+		resp.Body.Close()
+		require.Equal(t, http.StatusCreated, resp.StatusCode, "create %s", r.name)
+		t.Cleanup(func() {
+			del := authReq(t, http.MethodDelete, "/service/rest/v1/repositories/"+r.name, nil, token)
+			del.Body.Close()
+		})
+	}
+
+	t.Run("list shows the public repo and hides the private one", func(t *testing.T) {
+		resp := anonReq(t, "/api/v1/repositories")
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var repos []map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&repos))
+		names := map[string]bool{}
+		for _, r := range repos {
+			names[fmt.Sprint(r["name"])] = true
+		}
+		assert.True(t, names["anon-public"], "public repo missing from the anonymous listing")
+		assert.False(t, names["anon-private"], "private repo leaked into the anonymous listing")
+	})
+
+	t.Run("get by name answers for the public repo only", func(t *testing.T) {
+		pub := anonReq(t, "/service/rest/v1/repositories/anon-public")
+		defer pub.Body.Close()
+		assert.Equal(t, http.StatusOK, pub.StatusCode)
+
+		// 404 rather than 401/403: the name stays unguessable, and the caller
+		// is never told to go and authenticate for something they cannot see.
+		priv := anonReq(t, "/service/rest/v1/repositories/anon-private")
+		defer priv.Body.Close()
+		assert.Equal(t, http.StatusNotFound, priv.StatusCode)
+	})
+
+	t.Run("browse and search answer anonymously", func(t *testing.T) {
+		tree := anonReq(t, "/api/v1/browse/repositories/anon-public/path-tree")
+		defer tree.Body.Close()
+		assert.Equal(t, http.StatusOK, tree.StatusCode)
+
+		search := anonReq(t, "/service/rest/v1/search?repository=anon-public")
+		defer search.Body.Close()
+		assert.Equal(t, http.StatusOK, search.StatusCode)
+
+		components := anonReq(t, "/service/rest/v1/components?repository=anon-public")
+		defer components.Body.Close()
+		assert.Equal(t, http.StatusOK, components.StatusCode)
+	})
+
+	// Everything that is not a public read still demands a token.
+	t.Run("writes and user-scoped endpoints still require auth", func(t *testing.T) {
+		for _, path := range []string{"/api/v1/me", "/api/v1/tokens", "/service/rest/v1/security/roles"} {
+			resp := anonReq(t, path)
+			resp.Body.Close()
+			assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "%s answered anonymously", path)
+		}
+		req, err := http.NewRequest(http.MethodDelete,
+			server(t).URL+"/api/v1/browse/repositories/anon-public/path?path=/x", nil)
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		resp.Body.Close()
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "anonymous delete was not refused")
+	})
 }
