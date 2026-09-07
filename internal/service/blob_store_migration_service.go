@@ -299,6 +299,11 @@ func (s *BlobStoreMigrationService) runMigration(ctx context.Context, m *domain.
 			_ = s.migrations.FinishMigration(bgCtx, m.ID, "failed", &errMsg)
 			return
 		}
+		// expectedSize is what the flip below re-verifies against right before
+		// it runs: copied's own re-check when this iteration actually copied
+		// bytes, or the size already on record when resuming a run that had
+		// already gotten this key to target on a prior pass.
+		expectedSize := row.SizeBytes
 		if !exists {
 			copied, err := s.copyBlob(bgCtx, sourceStore, targetStore, row.BlobKey)
 			if err != nil {
@@ -307,19 +312,44 @@ func (s *BlobStoreMigrationService) runMigration(ctx context.Context, m *domain.
 				return
 			}
 			_ = s.blobs.UpdateUsedBytes(bgCtx, targetStoreMeta.Name, copied)
+			expectedSize = copied
 		}
 
-		if err := s.assets.UpdateBlobStoreForBlobKey(bgCtx, row.BlobKey, m.RepositoryName, m.TargetStoreID); err != nil {
-			errMsg := fmt.Sprintf("updating asset pointers for %s: %v", row.BlobKey, err)
+		// The repository stays pointed at the source store for the whole
+		// migration (it only flips once, after every row is done), so an
+		// ordinary write to this exact key can still land on source in the gap
+		// between the copy above and the flip+drop below. Both steps run under
+		// the same blob-key lock other same-key actors already respect
+		// (DeleteArtifact, CleanupService, oci.mountBlob), and the source
+		// object is re-measured immediately before the flip — a size mismatch
+		// means a write landed here since the copy, so this row's migration
+		// fails loudly (same philosophy as copyBlob's own re-check, #298)
+		// rather than repointing the asset at target while different bytes
+		// than the ones just copied sit on source.
+		flipErr := s.assets.WithBlobKeyLock(bgCtx, row.BlobKey, func(ctx context.Context) error {
+			cur, sizeErr := sourceStore.Size(ctx, row.BlobKey)
+			if sizeErr != nil {
+				return fmt.Errorf("re-checking source blob %s before flip: %w", row.BlobKey, sizeErr)
+			}
+			if cur != expectedSize {
+				return fmt.Errorf("blob %s changed on source before flip (%d -> %d bytes); re-run the migration", row.BlobKey, expectedSize, cur)
+			}
+			if err := s.assets.UpdateBlobStoreForBlobKey(ctx, row.BlobKey, m.RepositoryName, m.TargetStoreID); err != nil {
+				return fmt.Errorf("updating asset pointers for %s: %w", row.BlobKey, err)
+			}
+			// The bytes now live in the target and no row points at the source
+			// copy any more: drop it and give the space back. Without this the
+			// source keeps both the object and its used_bytes forever — GC
+			// cannot help, the key is still referenced, just in another store
+			// (#297).
+			s.dropSourceCopy(ctx, sourceStore, sourceMeta.Name, row)
+			return nil
+		})
+		if flipErr != nil {
+			errMsg := flipErr.Error()
 			_ = s.migrations.FinishMigration(bgCtx, m.ID, "failed", &errMsg)
 			return
 		}
-
-		// The bytes now live in the target and no row points at the source copy
-		// any more: drop it and give the space back. Without this the source
-		// keeps both the object and its used_bytes forever — GC cannot help,
-		// the key is still referenced, just in another store (#297).
-		s.dropSourceCopy(bgCtx, sourceStore, sourceMeta.Name, row)
 
 		doneAssets++
 		doneBytes += row.SizeBytes

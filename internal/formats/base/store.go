@@ -478,7 +478,11 @@ func DeleteArtifact(ctx context.Context, d formats.Deps, repoName, filePath stri
 		if gerr != nil {
 			return gerr
 		}
-		if cur == nil || cur.ID != asset.ID || cur.BlobKey != asset.BlobKey {
+		// BlobKey alone doesn't catch a same-path re-upload: it's
+		// sha256(repoName+":"+filePath), content-independent, so a re-upload to
+		// this exact path always keeps the same BlobKey. last_modified is what
+		// actually changes.
+		if cur == nil || cur.ID != asset.ID || cur.BlobKey != asset.BlobKey || !cur.LastModified.Equal(asset.LastModified) {
 			return nil
 		}
 		// One blob can carry several assets: an OCI manifest push registers the tag

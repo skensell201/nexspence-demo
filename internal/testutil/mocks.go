@@ -1082,15 +1082,16 @@ func (a *AssetRepo) CountByBlobKey(_ context.Context, blobKey, excludeID string)
 }
 
 // DeleteIfUnchanged mirrors the postgres conditional delete: the row goes only
-// if it still carries the scanned blob key and last_downloaded (NULL-safe).
-func (a *AssetRepo) DeleteIfUnchanged(_ context.Context, id, blobKey string, lastDownloaded *time.Time) (bool, error) {
+// if it still carries the scanned blob key, last_downloaded (NULL-safe) and
+// last_modified.
+func (a *AssetRepo) DeleteIfUnchanged(_ context.Context, id, blobKey string, lastDownloaded *time.Time, lastModified time.Time) (bool, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.DeleteErr != nil {
 		return false, a.DeleteErr
 	}
 	v, ok := a.byID[id]
-	if !ok || v.BlobKey != blobKey {
+	if !ok || v.BlobKey != blobKey || !v.LastModified.Equal(lastModified) {
 		return false, nil
 	}
 	switch {

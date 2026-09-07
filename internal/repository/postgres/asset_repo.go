@@ -307,6 +307,7 @@ func (r *assetRepo) Create(ctx context.Context, a *domain.Asset) error {
 		   size_bytes, content_type, sha1, sha256, md5, uploader_id)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		ON CONFLICT (repository_id, path) DO UPDATE SET
+		  blob_store_id = EXCLUDED.blob_store_id,
 		  blob_key     = EXCLUDED.blob_key,
 		  size_bytes   = EXCLUDED.size_bytes,
 		  content_type = EXCLUDED.content_type,
@@ -315,11 +316,11 @@ func (r *assetRepo) Create(ctx context.Context, a *domain.Asset) error {
 		  md5          = EXCLUDED.md5,
 		  uploader_id  = COALESCE(EXCLUDED.uploader_id, assets.uploader_id),
 		  last_modified = NOW()
-		RETURNING id, created_at`,
+		RETURNING id, created_at, last_modified`,
 		a.ComponentID, a.RepositoryID, a.Path, a.BlobStoreID, a.BlobKey,
 		a.SizeBytes, a.ContentType, nullStr(a.SHA1), nullStr(a.SHA256), nullStr(a.MD5),
 		nullStr(a.UploaderID),
-	).Scan(&a.ID, &a.CreatedAt)
+	).Scan(&a.ID, &a.CreatedAt, &a.LastModified)
 }
 
 func (r *assetRepo) Delete(ctx context.Context, id string) error {
@@ -328,13 +329,16 @@ func (r *assetRepo) Delete(ctx context.Context, id string) error {
 }
 
 // DeleteIfUnchanged deletes the row only if it is still exactly what an earlier
-// scan read — same blob key, same last_downloaded. IS NOT DISTINCT FROM makes
-// the NULL comparison work: most never-downloaded rows carry NULL, and NULL =
-// NULL would refuse every one of them.
-func (r *assetRepo) DeleteIfUnchanged(ctx context.Context, id, blobKey string, lastDownloaded *time.Time) (bool, error) {
+// scan read — same blob key, same last_downloaded, same last_modified.
+// last_modified is the term that actually catches a re-upload to the same
+// path: BlobKey is sha256(repoName+":"+filePath), content-independent, so a
+// re-upload always keeps the same blob key — only last_modified changes.
+// IS NOT DISTINCT FROM makes the NULL comparison work: most never-downloaded
+// rows carry NULL, and NULL = NULL would refuse every one of them.
+func (r *assetRepo) DeleteIfUnchanged(ctx context.Context, id, blobKey string, lastDownloaded *time.Time, lastModified time.Time) (bool, error) {
 	tag, err := r.db.Exec(ctx,
-		`DELETE FROM assets WHERE id = $1 AND blob_key = $2 AND last_downloaded IS NOT DISTINCT FROM $3`,
-		id, blobKey, lastDownloaded)
+		`DELETE FROM assets WHERE id = $1 AND blob_key = $2 AND last_downloaded IS NOT DISTINCT FROM $3 AND last_modified = $4`,
+		id, blobKey, lastDownloaded, lastModified)
 	if err != nil {
 		return false, err
 	}

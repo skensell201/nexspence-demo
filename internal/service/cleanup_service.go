@@ -345,7 +345,7 @@ func (s *CleanupService) runPolicy(ctx context.Context, p domain.CleanupPolicy, 
 			// downloaded or re-uploaded after the staleness scan: deleting by the
 			// captured ID would erase a live artifact and the next pull would 404.
 			lockErr := s.assets.WithBlobKeyLock(ctx, a.BlobKey, func(ctx context.Context) error {
-				rowDeleted, derr := s.assets.DeleteIfUnchanged(ctx, a.ID, a.BlobKey, a.LastDownloaded)
+				rowDeleted, derr := s.assets.DeleteIfUnchanged(ctx, a.ID, a.BlobKey, a.LastDownloaded, a.LastModified)
 				if derr != nil {
 					log.Warn("cleanup: asset delete failed", "id", a.ID, "err", derr)
 					return nil

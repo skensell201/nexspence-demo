@@ -65,10 +65,10 @@ type AssetRepo interface {
 	Create(ctx context.Context, a *domain.Asset) error
 	Delete(ctx context.Context, id string) error
 	// DeleteIfUnchanged deletes the row only if it is still exactly what an
-	// earlier scan read — same blob key, same last_downloaded. It reports
-	// whether the row was deleted; a mismatch (the asset was downloaded or
-	// re-uploaded since the scan) leaves the row alone.
-	DeleteIfUnchanged(ctx context.Context, id, blobKey string, lastDownloaded *time.Time) (bool, error)
+	// earlier scan read — same blob key, same last_downloaded, same
+	// last_modified. It reports whether the row was deleted; a mismatch (the
+	// asset was downloaded or re-uploaded since the scan) leaves the row alone.
+	DeleteIfUnchanged(ctx context.Context, id, blobKey string, lastDownloaded *time.Time, lastModified time.Time) (bool, error)
 	// WithBlobKeyLock serializes every caller that wants to read-then-act on a
 	// given blob key (count references, physically delete, register a new
 	// reference). Any other WithBlobKeyLock caller for the same key — same
