@@ -1,6 +1,7 @@
 package api
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -97,32 +98,45 @@ func TestDefaultCSP_AllowsTheBundledUI(t *testing.T) {
 		"style-src needs unsafe-inline for runtime-injected styles: %s", DefaultCSP)
 }
 
-// The bundled UI loads its webfonts from Google. A policy that forgets them
-// does not fail loudly — the page renders in a fallback font and nobody
-// notices until someone reads the console. This test pins the two origins the
-// UI actually references.
-func TestDefaultCSP_AllowsTheFontsTheUIRequests(t *testing.T) {
-	assert.Contains(t, DefaultCSP, "https://fonts.googleapis.com",
-		"style-src must admit the Google Fonts stylesheet")
-	assert.Contains(t, DefaultCSP, "https://fonts.gstatic.com",
-		"font-src must admit the font files themselves")
+// The UI used to load its webfonts from Google, which cost the policy two
+// allowlist entries and the app its only third-party request. The Geist
+// families ship with the bundle now (#431), so the policy names no external
+// origin at all — and an entry added back would have to justify itself here
+// first.
+func TestDefaultCSP_NamesNoThirdPartyOrigin(t *testing.T) {
+	assert.NotContains(t, DefaultCSP, "https://",
+		"the UI is entirely same-origin; an external origin here needs a reason: %s", DefaultCSP)
 }
 
 // Guards against the UI gaining a new external dependency that the policy does
-// not know about. Skipped when the frontend has not been built.
-func TestDefaultCSP_CoversEveryExternalOriginInIndexHTML(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "frontend", "index.html"))
-	if err != nil {
-		t.Skip("frontend/index.html not available")
+// not know about — in the document itself, and in the stylesheets, which is
+// where a webfont would come back from. Skipped when the sources are not
+// available.
+func TestDefaultCSP_CoversEveryExternalOriginTheUIReferences(t *testing.T) {
+	frontend := filepath.Join("..", "..", "frontend")
+	if _, err := os.Stat(frontend); err != nil {
+		t.Skip("frontend sources not available")
 	}
-	origins := regexp.MustCompile(`https://[a-zA-Z0-9.-]+`).FindAllString(string(raw), -1)
-	seen := map[string]bool{}
-	for _, o := range origins {
-		if seen[o] {
-			continue
+
+	sources := []string{filepath.Join(frontend, "index.html")}
+	err := filepath.WalkDir(filepath.Join(frontend, "src"), func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-		seen[o] = true
-		assert.Contains(t, DefaultCSP, o,
-			"index.html references %s but the CSP does not allow it", o)
+		if !d.IsDir() && strings.HasSuffix(path, ".css") {
+			sources = append(sources, path)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	external := regexp.MustCompile(`https://[a-zA-Z0-9.-]+`)
+	for _, src := range sources {
+		raw, err := os.ReadFile(src)
+		require.NoError(t, err)
+		for _, o := range external.FindAllString(string(raw), -1) {
+			assert.Contains(t, DefaultCSP, o,
+				"%s references %s but the CSP does not allow it", src, o)
+		}
 	}
 }

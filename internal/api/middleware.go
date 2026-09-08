@@ -100,15 +100,15 @@ func corsMiddleware(allowed []string) gin.HandlerFunc {
 //
 // style-src keeps 'unsafe-inline' because component libraries inject <style>
 // at runtime; script-src deliberately does not, which is the half that matters.
-// The two Google Fonts origins are the only third parties the UI references
-// (frontend/index.html); a policy without them renders the app in a fallback
-// font and says so only in the console. Self-hosting the fonts would let both
-// entries go.
+// The UI now references no third party at all: the Geist families it used to
+// pull from Google Fonts ship with the bundle (#431), which is why neither
+// origin is listed here any more. Nothing may be added back without a reason
+// that survives the question this policy exists to ask.
 const DefaultCSP = "default-src 'self'; " +
 	"script-src 'self'; " +
-	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+	"style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' data:; " +
-	"font-src 'self' data: https://fonts.gstatic.com; " +
+	"font-src 'self' data:; " +
 	"connect-src 'self'; " +
 	"object-src 'none'; " +
 	"base-uri 'self'; " +
