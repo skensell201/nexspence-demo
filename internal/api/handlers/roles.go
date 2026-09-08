@@ -46,6 +46,9 @@ func (h *RoleHandler) Create(c *gin.Context) {
 	}
 	ro.Source = "default"
 	if err := h.roles.Create(c.Request.Context(), &ro); err != nil {
+		if conflictOnDuplicateName(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -67,6 +70,9 @@ func (h *RoleHandler) Update(c *gin.Context) {
 	}
 	ro.ID = c.Param("id")
 	if err := h.roles.Update(c.Request.Context(), &ro); err != nil {
+		if conflictOnDuplicateName(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

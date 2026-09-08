@@ -59,6 +59,9 @@ func (h *RoutingRuleHandler) Create(c *gin.Context) {
 		r.Matchers = []string{}
 	}
 	if err := h.svc.Create(c.Request.Context(), &r); err != nil {
+		if conflictOnDuplicateName(c, err) {
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -77,6 +80,9 @@ func (h *RoutingRuleHandler) Update(c *gin.Context) {
 		r.Matchers = []string{}
 	}
 	if err := h.svc.Update(c.Request.Context(), &r); err != nil {
+		if conflictOnDuplicateName(c, err) {
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

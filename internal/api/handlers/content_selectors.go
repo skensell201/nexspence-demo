@@ -55,6 +55,9 @@ func (h *ContentSelectorHandler) Create(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Create(c.Request.Context(), &s); err != nil {
+		if conflictOnDuplicateName(c, err) {
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -70,6 +73,9 @@ func (h *ContentSelectorHandler) Update(c *gin.Context) {
 	}
 	s.ID = c.Param("id")
 	if err := h.svc.Update(c.Request.Context(), &s); err != nil {
+		if conflictOnDuplicateName(c, err) {
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

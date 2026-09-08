@@ -214,6 +214,9 @@ func (h *BlobStoreHandler) Create(c *gin.Context) {
 	}
 
 	if err := h.repo.Create(c.Request.Context(), &bs); err != nil {
+		if conflictOnDuplicateName(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

@@ -77,12 +77,12 @@ func (r *RoutingRuleRepo) GetByName(ctx context.Context, name string) (*domain.R
 
 // Create inserts a new routing rule and populates its generated fields.
 func (r *RoutingRuleRepo) Create(ctx context.Context, rr *domain.RoutingRule) error {
-	return r.pool.QueryRow(ctx,
+	return translateNameUnique(r.pool.QueryRow(ctx,
 		`INSERT INTO routing_rules (name, description, mode, matchers)
 		 VALUES ($1, $2, $3, $4)
 		 RETURNING id, created_at, updated_at`,
 		rr.Name, rr.Description, rr.Mode, rr.Matchers).
-		Scan(&rr.ID, &rr.CreatedAt, &rr.UpdatedAt)
+		Scan(&rr.ID, &rr.CreatedAt, &rr.UpdatedAt))
 }
 
 // Update overwrites the routing rule identified by rr.ID.
@@ -93,6 +93,9 @@ func (r *RoutingRuleRepo) Update(ctx context.Context, rr *domain.RoutingRule) er
 		 WHERE id=$5`,
 		rr.Name, rr.Description, rr.Mode, rr.Matchers, rr.ID)
 	if err != nil {
+		if conflict := translateNameUnique(err); conflict != err {
+			return conflict
+		}
 		return fmt.Errorf("routing_rules update: %w", err)
 	}
 	if tag.RowsAffected() == 0 {

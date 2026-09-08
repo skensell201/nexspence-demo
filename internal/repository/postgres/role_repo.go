@@ -72,12 +72,12 @@ func (r *roleRepo) GetByName(ctx context.Context, name string) (*domain.Role, er
 }
 
 func (r *roleRepo) Create(ctx context.Context, ro *domain.Role) error {
-	return r.db.QueryRow(ctx, `
+	return translateNameUnique(r.db.QueryRow(ctx, `
 		INSERT INTO roles (name, description, source, builtin)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at, updated_at`,
 		ro.Name, ro.Description, ro.Source, ro.ReadOnly,
-	).Scan(&ro.ID, &ro.CreatedAt, &ro.UpdatedAt)
+	).Scan(&ro.ID, &ro.CreatedAt, &ro.UpdatedAt))
 }
 
 func (r *roleRepo) Update(ctx context.Context, ro *domain.Role) error {
@@ -86,7 +86,7 @@ func (r *roleRepo) Update(ctx context.Context, ro *domain.Role) error {
 		WHERE id=$3`,
 		ro.Name, ro.Description, ro.ID,
 	)
-	return err
+	return translateNameUnique(err)
 }
 
 func (r *roleRepo) Delete(ctx context.Context, id string) error {

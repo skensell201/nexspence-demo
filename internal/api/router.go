@@ -531,7 +531,7 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 		// ── Metrics (authenticated) ───────────────────────────
 		authed.GET("/api/v1/metrics", handlers.MetricsHandler(pool))
 		authed.GET("/api/v1/metrics/history", handlers.HistoryHandler())
-		authed.GET("/api/v1/metrics/repos", handlers.ReposHandler(pool))
+		authed.GET("/api/v1/metrics/repos", handlers.ReposHandler(pool, log))
 
 		// ── API tokens (current user) ─────────────────────────
 		authed.GET("/api/v1/tokens", tokenH.List)
