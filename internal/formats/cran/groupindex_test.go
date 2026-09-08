@@ -77,6 +77,21 @@ func TestCRAN_MergeGroupIndex_EmptyMemberContributesNothing(t *testing.T) {
 	assert.Contains(t, string(body), "Package: dplyr")
 }
 
+// A stanza with no Package: line has no dedup key — it can't collide with
+// anything, so it passes through unioned rather than being dropped.
+func TestCRAN_MergeGroupIndex_StanzaWithoutPackageLinePassesThrough(t *testing.T) {
+	h := cran.New(formats.Deps{})
+	malformed := "Version: 1.1.4\nNote: no Package line\n"
+	parts := []formats.GroupIndexPart{
+		{Member: "m1", Body: []byte(malformed + "\n" + stanzaDplyr + "\n")},
+	}
+
+	body, _, err := h.MergeGroupIndex("g", "/src/contrib/PACKAGES", parts)
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "Note: no Package line")
+	assert.Contains(t, string(body), "Package: dplyr")
+}
+
 func TestCRAN_MergeGroupIndex_DedupPrefersFirstMember(t *testing.T) {
 	h := cran.New(formats.Deps{})
 	// Same Package+Version from two members with different bodies (simulated

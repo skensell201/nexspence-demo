@@ -2,6 +2,7 @@ package cran_test
 
 import (
 	"bytes"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -229,4 +230,73 @@ func TestCRAN_MethodNotAllowed(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestCRAN_HeadReturnsContentLengthNoBody(t *testing.T) {
+	repo := testutil.SimpleRepo("rpkgs8", "cran")
+	r := setup(repo)
+
+	require.Equal(t, http.StatusCreated,
+		putPkg(r, "rpkgs8", "/src/contrib/vctrs_0.6.5.tar.gz", "vctrs-bytes"))
+
+	req := httptest.NewRequest(http.MethodHead, "/repository/rpkgs8/src/contrib/vctrs_0.6.5.tar.gz", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "11", w.Header().Get("Content-Length"))
+	assert.Empty(t, w.Body.String(), "HEAD must not return a body")
+}
+
+// A filename without an underscore has no parseable version — cranCoords
+// falls back to the whole filename as the name and a placeholder version,
+// same convention apt's debCoords uses for non-conforming names.
+func TestCRAN_UploadWithoutUnderscore_FallsBackToPlaceholderVersion(t *testing.T) {
+	repo := testutil.SimpleRepo("rpkgs9", "cran")
+	r := setup(repo)
+
+	require.Equal(t, http.StatusCreated,
+		putPkg(r, "rpkgs9", "/src/contrib/nounderscore.tar.gz", "data"))
+
+	req := httptest.NewRequest(http.MethodGet, "/repository/rpkgs9/src/contrib/PACKAGES", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "Package: nounderscore.tar.gz")
+	assert.Contains(t, w.Body.String(), "Version: 0.0.0")
+}
+
+// A root-level POST/PUT that is neither a .tar.gz-suffixed path nor valid
+// multipart form data has nothing to derive a filename from.
+func TestCRAN_RootUpload_NeitherTarballNorMultipart_BadRequest(t *testing.T) {
+	repo := testutil.SimpleRepo("rpkgs10", "cran")
+	r := setup(repo)
+
+	req := httptest.NewRequest(http.MethodPut, "/repository/rpkgs10/", strings.NewReader("not-multipart"))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// A backend failure while building the index must surface as a 500, not a
+// silently empty or corrupted PACKAGES document.
+func TestCRAN_PackagesIndex_BackendError(t *testing.T) {
+	repo := testutil.SimpleRepo("rpkgs11", "cran")
+	comps := testutil.NewComponentRepo()
+	comps.Err = errors.New("search backend unavailable")
+	d := formats.Deps{
+		Repos:      testutil.NewRepoRepo(repo),
+		Blobs:      testutil.NewBlobStoreRepo(),
+		Components: comps,
+		Assets:     testutil.NewAssetRepo(),
+		BlobStore:  testutil.NewBlobStore(),
+		BaseURL:    "http://localhost:8080",
+	}
+	h := cran.New(d)
+	r := gin.New()
+	r.Any("/repository/:repoName/*path", func(c *gin.Context) { h.ServeHTTP(c) })
+
+	req := httptest.NewRequest(http.MethodGet, "/repository/rpkgs11/src/contrib/PACKAGES", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
