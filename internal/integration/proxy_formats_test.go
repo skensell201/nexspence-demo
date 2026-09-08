@@ -78,6 +78,26 @@ func TestProxyApt_RealShape(t *testing.T) {
 	assert.Equal(t, "deb-bytes", fetchOK(t, "/repository/apt-real/pool/main/h/hello/hello_2.10-3_amd64.deb"))
 }
 
+// ── cran (cran.r-project.org shape) ──────────────────────────────
+
+func TestProxyCRAN_RealShape(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/src/contrib/PACKAGES":
+			fmt.Fprint(w, "Package: dplyr\nVersion: 1.1.4\n")
+		case "/src/contrib/dplyr_1.1.4.tar.gz":
+			fmt.Fprint(w, "cran-bytes")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer up.Close()
+	createProxyRepo(t, "cran", "cran-real", up.URL)
+
+	assert.Contains(t, fetchOK(t, "/repository/cran-real/src/contrib/PACKAGES"), "Package: dplyr")
+	assert.Equal(t, "cran-bytes", fetchOK(t, "/repository/cran-real/src/contrib/dplyr_1.1.4.tar.gz"))
+}
+
 // ── yum (EPEL shape) ─────────────────────────────────────────────
 
 func TestProxyYum_RealShape(t *testing.T) {
