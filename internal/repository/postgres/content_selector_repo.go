@@ -91,7 +91,7 @@ func (r *ContentSelectorRepo) Update(ctx context.Context, s *domain.ContentSelec
 		 WHERE id=$4`,
 		s.Name, s.Description, s.Expression, s.ID)
 	if err != nil {
-		if conflict := translateNameUnique(err); conflict != err {
+		if conflict, ok := nameConflict(err); ok {
 			return conflict
 		}
 		return fmt.Errorf("content_selectors update: %w", err)

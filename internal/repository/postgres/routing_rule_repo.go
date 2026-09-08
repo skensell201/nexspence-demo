@@ -93,7 +93,7 @@ func (r *RoutingRuleRepo) Update(ctx context.Context, rr *domain.RoutingRule) er
 		 WHERE id=$5`,
 		rr.Name, rr.Description, rr.Mode, rr.Matchers, rr.ID)
 	if err != nil {
-		if conflict := translateNameUnique(err); conflict != err {
+		if conflict, ok := nameConflict(err); ok {
 			return conflict
 		}
 		return fmt.Errorf("routing_rules update: %w", err)

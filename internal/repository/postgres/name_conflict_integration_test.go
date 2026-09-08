@@ -74,13 +74,16 @@ func TestPrivilegeRepo_DuplicateName_IsConflict(t *testing.T) {
 	ctx := context.Background()
 	repo := NewPrivilegeRepo(pool)
 
-	taken := makePriv("conflict_priv_taken", nil)
+	// Migration 007 requires a selector for this privilege type.
+	cs := makeCS(t, ctx, "conflict_priv_cs", `true`)
+
+	taken := makePriv("conflict_priv_taken", &cs.ID)
 	if err := repo.Create(ctx, taken); err != nil {
 		t.Fatalf("Create taken: %v", err)
 	}
-	assertNameConflict(t, "second Create", repo.Create(ctx, makePriv("conflict_priv_taken", nil)))
+	assertNameConflict(t, "second Create", repo.Create(ctx, makePriv("conflict_priv_taken", &cs.ID)))
 
-	other := makePriv("conflict_priv_other", nil)
+	other := makePriv("conflict_priv_other", &cs.ID)
 	if err := repo.Create(ctx, other); err != nil {
 		t.Fatalf("Create other: %v", err)
 	}
