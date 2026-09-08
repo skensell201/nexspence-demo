@@ -17,6 +17,7 @@ import (
 	"github.com/nexspence-oss/nexspence/internal/formats"
 	"github.com/nexspence-oss/nexspence/internal/formats/cran"
 	"github.com/nexspence-oss/nexspence/internal/formats/group"
+	"github.com/nexspence-oss/nexspence/internal/formats/repoproxy"
 	"github.com/nexspence-oss/nexspence/internal/testutil"
 )
 
@@ -105,6 +106,76 @@ func TestGroupMerge_CranPackagesGzUnzipsToPlain(t *testing.T) {
 	unzipped, err := io.ReadAll(zr)
 	require.NoError(t, err)
 	assert.Equal(t, string(plain), string(unzipped))
+}
+
+// A group with a proxy member must never relay the proxy's real upstream
+// PACKAGES.rds: an R client reads that document before PACKAGES.gz/PACKAGES
+// (utils::available.packages), and a real, parseable .rds from upstream would
+// let R stop right there — silently hiding every hosted-only package forever,
+// not just until the next request. Regression for the review on PR #430.
+func TestGroupMerge_CranNeverRelaysProxyRDS(t *testing.T) {
+	orig := repoproxy.UpstreamClient
+	repoproxy.UpstreamClient = &http.Client{}
+	t.Cleanup(func() { repoproxy.UpstreamClient = orig })
+
+	const rdsMarker = "REAL-UPSTREAM-RDS-BINARY"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/PACKAGES.rds") {
+			_, _ = w.Write([]byte(rdsMarker))
+			return
+		}
+		_, _ = w.Write([]byte("Package: upstreamonly\nVersion: 1.0\n"))
+	}))
+	defer upstream.Close()
+
+	hosted := testutil.SimpleRepo("rj-hosted", "cran")
+	proxy := testutil.SimpleRepo("rj-proxy", "cran")
+	proxy.Type = domain.TypeProxy
+	proxy.ProxyConfig = map[string]any{"remote_url": upstream.URL}
+
+	// Proxy listed ahead of hosted: this is the actual failure mode, not just
+	// any order — before this fix, a hosted member answering first with its own
+	// 405 would (by accident) stop the old first-non-404 fan-out before proxy
+	// ever got a turn. With proxy first, its 200 wins the old fan-out outright.
+	groupDef := &domain.Repository{
+		ID: "repo-rj", Name: "rj", Format: "cran",
+		Type: domain.TypeGroup, Online: true,
+		FormatConfig: map[string]any{"member_names": []interface{}{"rj-proxy", "rj-hosted"}},
+	}
+
+	repoRepo := testutil.NewRepoRepo(hosted, proxy, groupDef)
+	d := formats.Deps{
+		Repos:      repoRepo,
+		Blobs:      testutil.NewBlobStoreRepo(),
+		Components: testutil.NewComponentRepo(),
+		Assets:     testutil.NewAssetRepo(),
+		BlobStore:  testutil.NewBlobStore(),
+		BaseURL:    "http://localhost:8080",
+	}
+	cranH := cran.New(d)
+	groupH := group.New(d, map[string]formats.FormatHandler{"cran": cranH})
+
+	r := gin.New()
+	r.Any("/repository/:repoName/*path", func(c *gin.Context) {
+		repo, _ := repoRepo.Get(c.Request.Context(), c.Param("repoName"))
+		if repo != nil && repo.Type == domain.TypeGroup {
+			groupH.ServeHTTP(c)
+			return
+		}
+		cranH.ServeHTTP(c)
+	})
+
+	putPkg(t, r, "rj-hosted", "onlyhosted_2.0.tar.gz")
+
+	rds := get(r, "/repository/rj/src/contrib/PACKAGES.rds")
+	assert.NotContains(t, rds.Body.String(), rdsMarker,
+		"the group must never answer with the proxy's real upstream .rds — R would parse it successfully and never fall back to the merged PACKAGES.gz")
+
+	// The properly mergeable flavors are unaffected: both members still show up.
+	plain := get(r, "/repository/rj/src/contrib/PACKAGES")
+	require.Equal(t, http.StatusOK, plain.Code)
+	assert.Contains(t, plain.Body.String(), "Package: onlyhosted")
+	assert.Contains(t, plain.Body.String(), "Package: upstreamonly")
 }
 
 // A one-member group is that member: its PACKAGES must match the member's own.

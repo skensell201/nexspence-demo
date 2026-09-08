@@ -32,6 +32,21 @@ func TestCRAN_GroupIndexSourcePath(t *testing.T) {
 
 	_, ok = h.GroupIndexSourcePath("/src/contrib/dplyr_1.1.4.tar.gz")
 	assert.False(t, ok, "package downloads keep first-non-404")
+
+	// .rds must be claimed too, even though the group can't answer it — R asks
+	// for it before .gz/plain, so left unclaimed a proxy member would shadow
+	// the merge under first-non-404 fan-out (see MergeGroupIndex).
+	src, ok = h.GroupIndexSourcePath("/src/contrib/PACKAGES.rds")
+	require.True(t, ok)
+	assert.Equal(t, "/src/contrib/PACKAGES", src)
+}
+
+func TestCRAN_MergeGroupIndex_RefusesRDS(t *testing.T) {
+	h := cran.New(formats.Deps{})
+	parts := []formats.GroupIndexPart{{Member: "m1", Body: []byte(stanzaDplyr + "\n")}}
+
+	_, _, err := h.MergeGroupIndex("g", "/src/contrib/PACKAGES.rds", parts)
+	assert.Error(t, err, "no valid RDS can be produced from merged stanzas")
 }
 
 func TestCRAN_MergeGroupIndex_UnionsStanzas(t *testing.T) {

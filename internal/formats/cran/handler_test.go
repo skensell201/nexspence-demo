@@ -232,6 +232,16 @@ func TestCRAN_MethodNotAllowed(t *testing.T) {
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }
 
+func TestCRAN_GetUnsupportedIndex_NotFound(t *testing.T) {
+	repo := testutil.SimpleRepo("rpkgs9", "cran")
+	r := setup(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/repository/rpkgs9/src/contrib/PACKAGES.rds", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
 func TestCRAN_HeadReturnsContentLengthNoBody(t *testing.T) {
 	repo := testutil.SimpleRepo("rpkgs8", "cran")
 	r := setup(repo)

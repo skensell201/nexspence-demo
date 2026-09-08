@@ -100,6 +100,13 @@ func (h *Handler) serveHosted(c *gin.Context, repoName, p string) {
 		}
 		c.Status(http.StatusNoContent)
 
+	// A GET this repository doesn't keep an index or tarball for (e.g.
+	// PACKAGES.rds, which nexspence never generates) is a missing resource, not
+	// a bad method — and a group of hosted members fanning out on it can only
+	// skip to the next member on 404, never on 405.
+	case c.Request.Method == http.MethodGet:
+		c.Status(http.StatusNotFound)
+
 	default:
 		c.Status(http.StatusMethodNotAllowed)
 	}
