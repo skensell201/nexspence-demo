@@ -94,7 +94,7 @@ const S = {
 const FORMAT_COLORS: Record<string, string> = {
   maven2: '#f97316', npm: '#ef4444', docker: '#3b82f6', oci: '#5b8def', pypi: '#a78bfa',
   go: '#06b6d4', nuget: '#8b5cf6', helm: '#0ea5e9', raw: '#6b7280', apt: '#f59e0b', yum: '#10b981',
-  cran: '#276dc3',
+  cran: '#276dc3', alpine: '#0d597f',
 }
 
 function fmtSize(b: number | undefined) {
@@ -297,7 +297,7 @@ export default function SearchPage() {
             <Select
               options={[
                 { value: '', label: 'any' },
-                ...['maven2','npm','docker','oci','pypi','go','nuget','helm','raw','apt','yum','cran'].map(f => ({ value: f, label: f })),
+                ...['maven2','npm','docker','oci','pypi','go','nuget','helm','raw','apt','yum','cran','alpine'].map(f => ({ value: f, label: f })),
               ]}
               value={filters.format}
               onChange={v => setFilters(f => ({ ...f, format: v }))}

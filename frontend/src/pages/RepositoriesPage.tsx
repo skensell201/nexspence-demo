@@ -72,6 +72,7 @@ const FORMAT_COLORS: Record<string, string> = {
   rubygems:  '#e9573f',
   terraform: '#7b42bc',
   cran:      '#276dc3',
+  alpine:    '#0d597f',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -165,7 +166,7 @@ export default function RepositoriesPage() {
         <Select
           options={[
             { value: '', label: 'All formats' },
-            ...['maven2','npm','docker','oci','pypi','go','nuget','helm','raw','apt','yum','cargo','conan','conda','terraform','rubygems','cran'].map(f => ({ value: f, label: f })),
+            ...['maven2','npm','docker','oci','pypi','go','nuget','helm','raw','apt','yum','cargo','conan','conda','terraform','rubygems','cran','alpine'].map(f => ({ value: f, label: f })),
           ]}
           value={formatFilter}
           onChange={setFormatFilter}
@@ -408,6 +409,7 @@ const PROXY_DEFAULTS: Record<string, string> = {
   rubygems:  'https://rubygems.org/',
   terraform: 'https://registry.terraform.io/',
   cran:      'https://cran.r-project.org/',
+  alpine:    'https://dl-cdn.alpinelinux.org/alpine/latest-stable/main/',
 }
 
 /** Sets a trimmed value on cfg, or removes the key entirely when the field was cleared. */
@@ -550,7 +552,7 @@ function CreateRepoModal({ onClose, onCreated }: {
       <div className={styles.formRow}>
         <label style={LABEL_STYLE}>Format</label>
         <Select
-          options={['maven2','npm','docker','oci','pypi','go','nuget','helm','raw','apt','yum','cargo','conan','conda','terraform','rubygems','cran'].map(f => ({ value: f, label: f }))}
+          options={['maven2','npm','docker','oci','pypi','go','nuget','helm','raw','apt','yum','cargo','conan','conda','terraform','rubygems','cran','alpine'].map(f => ({ value: f, label: f }))}
           value={form.format}
           onChange={handleFormatChange}
         />

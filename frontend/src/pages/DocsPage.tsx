@@ -783,6 +783,35 @@ conan upload "mylib/1.0" -r=nexspence --confirm` },
       },
     ],
   },
+  {
+    id: 'alpine',
+    name: 'Alpine (apk)',
+    icon: '🏔',
+    iconUrl: 'https://cdn.simpleicons.org/alpinelinux/0D597F',
+    description: 'Alpine Linux apk repository. Serves .apk packages with an auto-generated APKINDEX.tar.gz index. Unsigned — clients need --allow-untrusted.',
+    sections: (base) => [
+      {
+        title: 'Repository URL',
+        codes: [{ lang: 'text', content: `${base}/repository/alpine-hosted/` }],
+      },
+      {
+        title: 'Configure /etc/apk/repositories',
+        codes: [{ lang: 'bash', content: `echo "${base}/repository/alpine-hosted" \\\n  | sudo tee -a /etc/apk/repositories\n\nsudo apk update --allow-untrusted` }],
+        note: 'This repository is unsigned — apk needs --allow-untrusted (or a per-instance policy that skips signature checks) until a signing key is configured.',
+      },
+      {
+        title: 'Publish a .apk Package',
+        codes: [{ lang: 'bash', content: `curl -u admin:admin123 \\\n  -H "Content-Type: application/octet-stream" \\\n  -T mypackage-1.0.0-r0.apk \\\n  "${base}/repository/alpine-hosted/x86_64/mypackage-1.0.0-r0.apk"` }],
+      },
+      {
+        title: 'Install a Package',
+        codes: [
+          { label: 'Using apk:', lang: 'bash', content: `sudo apk add --allow-untrusted mypackage` },
+          { label: 'Direct .apk download and install:', lang: 'bash', content: `curl -u admin:admin123 \\\n  -O "${base}/repository/alpine-hosted/x86_64/mypackage-1.0.0-r0.apk"\nsudo apk add --allow-untrusted --no-network mypackage-1.0.0-r0.apk` },
+        ],
+      },
+    ],
+  },
 ]
 
 function GuideRepositories() {
