@@ -33,7 +33,7 @@ CREATE TABLE repositories (
     format          TEXT NOT NULL CHECK (format IN (
                         'maven2', 'npm', 'docker', 'oci', 'pypi',
                         'go', 'nuget', 'helm', 'raw', 'apt', 'yum', 'cargo', 'conan', 'conda', 'terraform',
-                        'rubygems', 'cran'
+                        'rubygems', 'cran', 'alpine'
                     )),
     type            TEXT NOT NULL CHECK (type IN ('hosted', 'proxy', 'group')),
     blob_store_id   UUID REFERENCES blob_stores(id),

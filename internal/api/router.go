@@ -25,6 +25,7 @@ import (
 	"github.com/nexspence-oss/nexspence/internal/distlock"
 	"github.com/nexspence-oss/nexspence/internal/domain"
 	"github.com/nexspence-oss/nexspence/internal/formats"
+	"github.com/nexspence-oss/nexspence/internal/formats/alpine"
 	"github.com/nexspence-oss/nexspence/internal/formats/apt"
 	"github.com/nexspence-oss/nexspence/internal/formats/cargo"
 	"github.com/nexspence-oss/nexspence/internal/formats/conan"
@@ -288,6 +289,7 @@ func NewRouter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log 
 		"cran":      cran.New(formatDeps),
 		"yum":       yum.New(formatDeps),
 		"docker":    oci.New(formatDeps),
+		"alpine":    alpine.New(formatDeps),
 	}
 	// The OCI Distribution protocol is served under two labels — same handler,
 	// different presentation (proxy defaults, UI, command hints).

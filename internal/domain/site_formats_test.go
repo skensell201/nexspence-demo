@@ -86,6 +86,7 @@ func TestSiteFormatTableListsEveryFormat(t *testing.T) {
 		domain.FormatTerraform: "Terraform",
 		domain.FormatRubyGems:  "RubyGems",
 		domain.FormatCRAN:      "CRAN",
+		domain.FormatAlpine:    "Alpine",
 	}
 	for _, f := range domain.AllFormats {
 		label, ok := labels[f]

@@ -78,6 +78,27 @@ func TestProxyApt_RealShape(t *testing.T) {
 	assert.Equal(t, "deb-bytes", fetchOK(t, "/repository/apt-real/pool/main/h/hello/hello_2.10-3_amd64.deb"))
 }
 
+// ── alpine (dl-cdn.alpinelinux.org shape) ────────────────────────
+
+func TestProxyAlpine_RealShape(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/x86_64/APKINDEX.tar.gz":
+			w.Header().Set("Content-Type", "application/gzip")
+			fmt.Fprint(w, "apkindex-bytes")
+		case "/x86_64/curl-8.9.0-r0.apk":
+			fmt.Fprint(w, "apk-bytes")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer up.Close()
+	createProxyRepo(t, "alpine", "alpine-real", up.URL)
+
+	assert.Contains(t, fetchOK(t, "/repository/alpine-real/x86_64/APKINDEX.tar.gz"), "apkindex-bytes")
+	assert.Equal(t, "apk-bytes", fetchOK(t, "/repository/alpine-real/x86_64/curl-8.9.0-r0.apk"))
+}
+
 // ── cran (cran.r-project.org shape) ──────────────────────────────
 
 func TestProxyCRAN_RealShape(t *testing.T) {
