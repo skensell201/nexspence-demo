@@ -34,6 +34,7 @@ const (
 	FormatConda     RepoFormat = "conda"
 	FormatTerraform RepoFormat = "terraform"
 	FormatRubyGems  RepoFormat = "rubygems"
+	FormatCRAN      RepoFormat = "cran"
 
 	TypeHosted RepoType = "hosted"
 	TypeProxy  RepoType = "proxy"
@@ -60,6 +61,7 @@ var AllFormats = []RepoFormat{
 	FormatConda,
 	FormatTerraform,
 	FormatRubyGems,
+	FormatCRAN,
 }
 
 // IsOCIRegistry reports whether a repository of this format speaks the OCI

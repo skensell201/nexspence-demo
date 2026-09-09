@@ -44,12 +44,13 @@ interface PolicyForm {
   scopePath: string
 }
 
-const FORMATS = ['*', 'maven2', 'npm', 'docker', 'oci', 'pypi', 'go', 'nuget', 'helm', 'raw', 'apt', 'yum', 'cargo', 'conan']
+const FORMATS = ['*', 'maven2', 'npm', 'docker', 'oci', 'pypi', 'go', 'nuget', 'helm', 'raw', 'apt', 'yum', 'cargo', 'conan', 'cran']
 
 const FORMAT_COLOR: Record<string, string> = {
   maven2: '#f97316', npm: '#ef4444', docker: '#3b82f6', oci: '#5b8def', pypi: '#a78bfa',
   go: '#06b6d4', nuget: '#8b5cf6', helm: '#0ea5e9', raw: '#6b7280',
   apt: '#f59e0b', yum: '#10b981', cargo: '#fb923c', conan: '#94a3b8',
+  cran: '#276dc3',
   '*': '#6b7280',
 }
 
