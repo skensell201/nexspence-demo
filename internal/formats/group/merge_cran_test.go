@@ -170,6 +170,13 @@ func TestGroupMerge_CranNeverRelaysProxyRDS(t *testing.T) {
 	rds := get(r, "/repository/rj/src/contrib/PACKAGES.rds")
 	assert.NotContains(t, rds.Body.String(), rdsMarker,
 		"the group must never answer with the proxy's real upstream .rds — R would parse it successfully and never fall back to the merged PACKAGES.gz")
+	// #436: relaying a member's document here also meant transferring it for
+	// nothing (a real proxy's plain PACKAGES can be tens of MB) before R even
+	// discards it — cran.Handler implements GroupIndexStrictMerger so this
+	// answers a short 502 instead of the proxy's document.
+	assert.Equal(t, http.StatusBadGateway, rds.Code, "the refusal must fail the group honestly, not degrade to a member's document")
+	assert.NotContains(t, rds.Body.String(), "upstreamonly", "the 502 body must be an error, not the proxy member's own document")
+	assert.NotContains(t, rds.Body.String(), "onlyhosted", "the 502 body must be an error, not the hosted member's own document")
 
 	// The properly mergeable flavors are unaffected: both members still show up.
 	plain := get(r, "/repository/rj/src/contrib/PACKAGES")
