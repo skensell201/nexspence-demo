@@ -1,0 +1,71 @@
+/* ============================================================
+   Geist — self-hosted (#431)
+   ============================================================
+
+   The UI used to pull these two families from Google Fonts, the only
+   third party it referenced. That stylesheet could carry no integrity
+   hash: the css2 endpoint answers with a different @font-face src per
+   requesting User-Agent, so any one fixed hash would break the
+   stylesheet for a large share of visitors. Served from our own origin
+   the files are inside the bundle instead, hashed by the bundler and
+   covered by the same policy as the rest of the app — and the two
+   Google Fonts entries could leave DefaultCSP.
+
+   The weights below are exactly the ones the removed <link> asked for:
+   Geist 400/500/600/700 and Geist Mono 400/500/600. Files come from
+   github.com/vercel/geist-font (SIL OFL 1.1, see LICENSE.txt here).
+
+   font-display: swap keeps the old link's behaviour — text paints in
+   the fallback and re-renders once the face arrives, rather than
+   sitting invisible. */
+
+@font-face {
+  font-family: 'Geist';
+  src: url('./Geist-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist';
+  src: url('./Geist-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist';
+  src: url('./Geist-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist';
+  src: url('./Geist-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('./GeistMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('./GeistMono-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('./GeistMono-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
