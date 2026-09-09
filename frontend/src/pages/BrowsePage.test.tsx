@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { QueryClient } from '@tanstack/react-query'
 import BrowsePage from './BrowsePage'
-import { renderWithProviders, seedAuthAsAdmin } from '@/test/renderUtils'
+import { renderWithProviders, seedAuthAsAdmin, seedAuthAsGuest } from '@/test/renderUtils'
 import { server } from '@/test/msw/server'
 import { fixtures } from '@/test/fixtures'
 import { useAuthStore } from '@/store/authStore'
@@ -874,5 +874,47 @@ describe('BrowsePage — non-admin', () => {
     renderBrowse('?repo=maven-hosted')
     await screen.findByText('pkg-a')
     expect(screen.queryByTitle('Delete')).not.toBeInTheDocument()
+  })
+})
+
+// A visitor with no session may browse public repositories (#404). The
+// privilege lookup, promotion and scan results are signed-in surfaces: they
+// are neither requested nor offered, so the page renders without a single
+// 401 — the response interceptor of the time turned the first one into a
+// redirect to /login.
+describe('BrowsePage — signed-out visitor', () => {
+  beforeEach(() => {
+    seedAuthAsGuest()
+    window.location.href = 'http://localhost/'
+  })
+
+  it('browses a public repository without privileges, selection or promote', async () => {
+    const user = userEvent.setup()
+    let privilegeHits = 0
+    server.use(
+      http.get('/api/v1/me/privileges', () => {
+        privilegeHits++
+        return HttpResponse.json({ error: 'authentication required' }, { status: 401 })
+      }),
+      http.get('/service/rest/v1/components', () =>
+        HttpResponse.json({
+          items: [
+            { id: 'c1', name: 'pkg-a', group: 'com.example', version: '1.0', format: 'maven2', assets: [{ id: 'a1', path: 'com/example/pkg-a/1.0/pkg-a.jar', fileSize: 2048, contentType: 'application/java-archive' }] },
+          ],
+          continuationToken: null,
+        }),
+      ),
+    )
+    renderBrowse()
+    await screen.findByText('Choose a repository above')
+    await user.click(screen.getByRole('button', { name: /Select repository/ }))
+    await user.click((await screen.findAllByText('maven-hosted'))[0])
+    expect(await screen.findByText('pkg-a')).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(privilegeHits).toBe(0)
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Promote/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Upload/ })).not.toBeInTheDocument()
+    expect(window.location.href).toBe('http://localhost/')
   })
 })

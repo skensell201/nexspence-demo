@@ -916,3 +916,58 @@ describe('RepositoriesPage', () => {
     expect(screen.getByText('oci')).toBeInTheDocument()
   })
 })
+
+// A visitor with no session lands on this page too (#404). The list answers
+// them, but blob-store names and per-repository quota still sit behind the
+// auth middleware — so those must not even be asked for: with the response
+// interceptor of the time, the first 401 sent the visitor to /login.
+describe('RepositoriesPage — signed-out visitor', () => {
+  beforeEach(() => {
+    seedAuthAsGuest()
+    window.location.href = 'http://localhost/'
+  })
+
+  it('lists public repositories without asking for signed-in data or leaving the page', async () => {
+    const hits = { blobstores: 0, quota: 0 }
+    server.use(
+      http.get('/service/rest/v1/repositories', () => HttpResponse.json(repoList)),
+      http.get('/service/rest/v1/blobstores', () => {
+        hits.blobstores++
+        return HttpResponse.json({ error: 'authentication required' }, { status: 401 })
+      }),
+      http.get('/api/v1/repositories/:name/quota', () => {
+        hits.quota++
+        return HttpResponse.json({ error: 'authentication required' }, { status: 401 })
+      }),
+    )
+    renderWithProviders(<RepositoriesPage />)
+    expect(await screen.findByText('maven-hosted')).toBeInTheDocument()
+    expect(screen.getByText('npm-proxy')).toBeInTheDocument()
+    expect(screen.getByText('docker-group')).toBeInTheDocument()
+    // Give any stray query a tick to fire before asserting it never did.
+    await new Promise((r) => setTimeout(r, 50))
+    expect(hits).toEqual({ blobstores: 0, quota: 0 })
+    expect(window.location.href).toBe('http://localhost/')
+    expect(screen.queryByRole('button', { name: /New Repository/i })).not.toBeInTheDocument()
+  })
+
+  it('fetches blob-store names and quota once signed in', async () => {
+    seedAuthAsAdmin()
+    const hits = { blobstores: 0, quota: 0 }
+    server.use(
+      http.get('/service/rest/v1/repositories', () => HttpResponse.json(repoList)),
+      http.get('/service/rest/v1/blobstores', () => {
+        hits.blobstores++
+        return HttpResponse.json(blobStores)
+      }),
+      http.get('/api/v1/repositories/:name/quota', () => {
+        hits.quota++
+        return HttpResponse.json({ usedBytes: 1, quotaBytes: 2, percentUsed: 50 })
+      }),
+    )
+    renderWithProviders(<RepositoriesPage />)
+    expect(await screen.findByText('maven-hosted')).toBeInTheDocument()
+    await waitFor(() => expect(hits.blobstores).toBeGreaterThan(0))
+    await waitFor(() => expect(hits.quota).toBe(repoList.length))
+  })
+})

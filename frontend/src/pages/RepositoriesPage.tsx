@@ -83,6 +83,7 @@ export default function RepositoriesPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const isAdmin = useAuthStore(s => s.isAdmin())
+  const signedIn = useAuthStore(s => s.token !== null)
   const [filter, setFilter] = useState('')
   const [formatFilter, setFormatFilter] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -96,9 +97,13 @@ export default function RepositoriesPage() {
         .then(r => r.data),
   })
 
+  // Blob-store names and per-repository quota sit behind the auth middleware,
+  // while the list itself answers a signed-out visitor (#404). Ask for them
+  // only with a session — otherwise every row would cost a 401.
   const { data: blobStores = [] } = useQuery<BlobStoreLite[]>({
     queryKey: ['blobstores'],
     queryFn: () => nexusApi.listBlobStores().then(r => r.data),
+    enabled: signedIn,
   })
   const storeNameById = new Map(blobStores.map(b => [b.id, b.name]))
 
@@ -285,10 +290,12 @@ function RepoRow({
   onToggleOnline: (online: boolean) => void
   onExport: () => void
 }) {
+  const signedIn = useAuthStore(s => s.token !== null)
   const { data: quota } = useQuery({
     queryKey: ['repoQuota', repo.name],
     queryFn: () => nexspenceApi.getRepositoryQuota(repo.name).then(r => r.data),
     staleTime: 30_000,
+    enabled: signedIn,
   })
   const pct = quota?.percentUsed ?? null
 

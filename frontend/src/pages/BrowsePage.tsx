@@ -199,6 +199,9 @@ function fmtElapsed(s: number): string {
 }
 
 function ScanBadgeRow({ componentId }: { componentId: string }) {
+  // Scan results stay behind the auth middleware (#404): a signed-out visitor
+  // gets no badge rather than a 401 per selected component.
+  const signedIn = useAuthStore((st) => st.token !== null)
   const queryClient = useQueryClient()
   const queryKey = ['scanResult', componentId]
   const [mutationError, setMutationError] = useState<string | null>(null)
@@ -213,6 +216,7 @@ function ScanBadgeRow({ componentId }: { componentId: string }) {
         .then((r) => (r.data as ScanResult | null) ?? null)
         .catch((e) => (e.response?.status === 404 ? null : Promise.reject(e))),
     retry: false,
+    enabled: signedIn,
   })
 
   // The scanned component id travels with the mutation instead of being read
@@ -256,6 +260,8 @@ function ScanBadgeRow({ componentId }: { componentId: string }) {
   const findings = scanResult?.findings ?? []
   const filtered =
     sevFilter === 'ALL' ? findings : findings.filter((f) => f.severity?.toUpperCase() === sevFilter)
+
+  if (!signedIn) return null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 0 0' }}>
@@ -1172,11 +1178,17 @@ export default function BrowsePage() {
   const limit = 25
 
   const { isAdmin } = useAuthStore()
+  const signedIn = useAuthStore((st) => st.token !== null)
   const queryClient = useQueryClient()
 
+  // Privileges, promotion and scan results are signed-in surfaces; the browse
+  // trees and listings answer a visitor on their own (#404). Without a session
+  // the privilege query is skipped and the promote / select affordances are
+  // not rendered, so a public repository browses without a single 401.
   const { data: myPrivs = [] } = useQuery<Privilege[]>({
     queryKey: ['me-privileges'],
     queryFn: () => nexspenceApi.myPrivileges(),
+    enabled: signedIn,
   })
 
   const canDeleteRepo = isAdmin() || myPrivs.some(p =>
@@ -1489,7 +1501,7 @@ export default function BrowsePage() {
                     <PanelBtn onClick={() => setUsageTarget({ format: dockerDetail.format, name: dockerDetail.name })}>
                       <BookOpen size={13} /> Example Usage
                     </PanelBtn>
-                    <PanelBtn onClick={async () => {
+                    {signedIn && <PanelBtn onClick={async () => {
                       try {
                         const res = await apiClient.get(`/api/v1/components/${dockerSelection.componentId}/promotion-rules`)
                         if (res.data.length === 0) { alert('No promotion rules defined for this repository.'); return }
@@ -1506,7 +1518,7 @@ export default function BrowsePage() {
                       setPromoteModalOpen(true)
                     }}>
                       Promote
-                    </PanelBtn>
+                    </PanelBtn>}
                   </div>
                   <TagEditor
                     key={dockerSelection.componentId}
@@ -1617,7 +1629,7 @@ export default function BrowsePage() {
                       <PanelBtn onClick={() => setUsageTarget({ format: selectedRepo?.format ?? 'raw', name: node.label })}>
                         <BookOpen size={13} /> Usage
                       </PanelBtn>
-                      {node.componentId && (
+                      {signedIn && node.componentId && (
                         <PanelBtn onClick={async () => {
                           try {
                             const res = await apiClient.get(`/api/v1/components/${node.componentId}/promotion-rules`)
@@ -1660,7 +1672,7 @@ export default function BrowsePage() {
         </div>
       ) : (
         <>
-          {selectedComponentIDs.size > 0 && (
+          {signedIn && selectedComponentIDs.size > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'rgba(59,130,246,0.1)', borderRadius: 8, marginBottom: 8, border: '1px solid rgba(59,130,246,0.3)' }}>
               <span style={{ fontSize: 13, color: '#93c5fd' }}>{selectedComponentIDs.size} selected</span>
               <HoloButton variant="primary" onClick={async () => {
@@ -1727,7 +1739,7 @@ export default function BrowsePage() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <input
+                    {signedIn && <input
                       type="checkbox"
                       checked={selectedComponentIDs.has(c.id)}
                       onChange={e => {
@@ -1737,7 +1749,7 @@ export default function BrowsePage() {
                         setSelectedComponentIDs(next)
                       }}
                       style={{ cursor: 'pointer', accentColor: '#3b82f6' }}
-                    />
+                    />}
                   </div>
                   <Truncated text={c.name} style={{ fontWeight: 600, color: 'var(--holo-text)' }} />
                   <Truncated text={c.group || '—'} style={S.muted} />

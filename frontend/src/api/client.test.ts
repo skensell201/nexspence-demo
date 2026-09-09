@@ -106,7 +106,8 @@ describe('apiClient request interceptor', () => {
 })
 
 describe('apiClient response interceptor', () => {
-  it('redirects to /login on 401 from a non-login endpoint', async () => {
+  it('redirects to /login when a presented token is refused with 401', async () => {
+    localStorage.setItem('nexspence_token', 'expired-token')
     server.use(
       http.get('/api/v1/protected', () =>
         HttpResponse.json({ error: 'unauthorized' }, { status: 401 })
@@ -119,6 +120,21 @@ describe('apiClient response interceptor', () => {
     }
     // The interceptor sets window.location.href = '/login'
     expect(window.location.href).toBe('/login')
+  })
+
+  // A signed-out visitor browsing public repositories (#404) meets 401s from
+  // the signed-in-only endpoints; none of them is a session to lose.
+  it('leaves a signed-out visitor where they are on 401 (no token presented)', async () => {
+    let authHeader: string | null = 'unset'
+    server.use(
+      http.get('/api/v1/protected-anon', ({ request }) => {
+        authHeader = request.headers.get('Authorization')
+        return HttpResponse.json({ error: 'unauthorized' }, { status: 401 })
+      })
+    )
+    await expect(apiClient.get('/api/v1/protected-anon')).rejects.toBeDefined()
+    expect(authHeader).toBeNull()
+    expect(window.location.href).toBe('http://localhost/')
   })
 
   it('clears nexspence_token from localStorage on 401 from non-login endpoint', async () => {
