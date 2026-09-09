@@ -45,10 +45,13 @@ func (h *Handler) GroupIndexSourcePath(p string) (string, bool) {
 // MergeGroupIndex implements formats.GroupIndexMerger.
 func (h *Handler) MergeGroupIndex(_, p string, parts []formats.GroupIndexPart) ([]byte, string, error) {
 	if strings.HasSuffix(p, ".rds") {
-		// Refusing degrades to the first member's plain-text body (see
-		// group.Handler.serveMergedIndex) — not valid RDS either, but R's own
-		// readRDS/available.packages fallback treats a read error exactly like a
-		// failed download and retries PACKAGES.gz, which merges correctly.
+		// Refusing takes GroupIndexStrictMerger's isStrict branch below (a
+		// short 502) instead of degrading to a member's document: against a
+		// real proxy member that document is upstream's whole index — tens of
+		// MB a client downloads, discards because it's not valid RDS, then
+		// re-fetches anyway once it retries PACKAGES.gz. A 502 costs it
+		// nothing and R's fallback treats a failed download exactly like a
+		// failed readRDS, so the retry to PACKAGES.gz is unchanged.
 		return nil, "", errRDSUnsupported
 	}
 	plain := mergePackages(parts)
@@ -56,6 +59,18 @@ func (h *Handler) MergeGroupIndex(_, p string, parts []formats.GroupIndexPart) (
 		return gzipBytes(plain), "application/x-gzip", nil
 	}
 	return plain, "text/plain; charset=utf-8", nil
+}
+
+// GroupIndexMemberFailureIsFatal implements formats.GroupIndexStrictMerger.
+// Always false: a member's non-2xx source answer is still just "nothing to
+// contribute" and gets skipped exactly as GroupIndexMerger's default
+// behavior already does. Implementing this interface at all is what routes
+// MergeGroupIndex's PACKAGES.rds refusal above through the group layer's
+// isStrict branch (an honest 502) instead of its default degrade-to-first-
+// member's-document behavior — the two failure modes are independent, and
+// this format only needs to opt into the second one.
+func (h *Handler) GroupIndexMemberFailureIsFatal(_ string, _ int) bool {
+	return false
 }
 
 // mergePackages unions the members' stanzas, deduped by Package+Version (first

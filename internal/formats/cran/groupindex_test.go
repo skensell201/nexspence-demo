@@ -49,6 +49,19 @@ func TestCRAN_MergeGroupIndex_RefusesRDS(t *testing.T) {
 	assert.Error(t, err, "no valid RDS can be produced from merged stanzas")
 }
 
+// The interface itself must be implemented — that's what routes the refusal
+// above through the group layer's isStrict branch (a 502) instead of its
+// default degrade-to-first-member's-document behavior. What the callback
+// answers must stay false, though: a member's non-2xx source answer is still
+// just "nothing to contribute", not a reason to fail the whole group.
+func TestCRAN_ImplementsGroupIndexStrictMerger(t *testing.T) {
+	h := cran.New(formats.Deps{})
+	strict, ok := any(h).(formats.GroupIndexStrictMerger)
+	require.True(t, ok, "cran.Handler must implement formats.GroupIndexStrictMerger")
+	assert.False(t, strict.GroupIndexMemberFailureIsFatal("/src/contrib/PACKAGES", 502))
+	assert.False(t, strict.GroupIndexMemberFailureIsFatal("/src/contrib/PACKAGES", 404))
+}
+
 func TestCRAN_MergeGroupIndex_UnionsStanzas(t *testing.T) {
 	h := cran.New(formats.Deps{})
 	parts := []formats.GroupIndexPart{
