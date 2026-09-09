@@ -65,12 +65,12 @@ func (r *blobStoreRepo) GetByID(ctx context.Context, id string) (*domain.BlobSto
 
 func (r *blobStoreRepo) Create(ctx context.Context, b *domain.BlobStore) error {
 	cfg, _ := json.Marshal(b.Config)
-	return r.db.QueryRow(ctx, `
+	return translateNameUnique(r.db.QueryRow(ctx, `
 		INSERT INTO blob_stores (name, type, config, quota_bytes)
 		VALUES ($1,$2,$3,$4)
 		RETURNING id, created_at, updated_at`,
 		b.Name, b.Type, cfg, b.QuotaBytes,
-	).Scan(&b.ID, &b.CreatedAt, &b.UpdatedAt)
+	).Scan(&b.ID, &b.CreatedAt, &b.UpdatedAt))
 }
 
 func (r *blobStoreRepo) Update(ctx context.Context, b *domain.BlobStore) error {

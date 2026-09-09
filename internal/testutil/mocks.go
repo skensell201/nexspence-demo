@@ -174,6 +174,9 @@ type BlobStoreRepo struct {
 	// this repo shares a database with. Without it a recompute finds no assets
 	// and zeroes every store, exactly as the SQL would against an empty table.
 	assets *AssetRepo
+	// Err, when non-nil, is what Create returns — a blob store's name is its
+	// key here and in postgres, where Update cannot rename one.
+	Err error
 }
 
 func NewBlobStoreRepo(stores ...*domain.BlobStore) *BlobStoreRepo {
@@ -225,6 +228,9 @@ func (b *BlobStoreRepo) GetByID(_ context.Context, id string) (*domain.BlobStore
 func (b *BlobStoreRepo) Create(_ context.Context, s *domain.BlobStore) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.Err != nil {
+		return b.Err
+	}
 	b.stores[s.Name] = s
 	return nil
 }
@@ -1843,6 +1849,7 @@ type ContentSelectorRepo struct {
 	mu                sync.Mutex
 	selectors         map[string]*domain.ContentSelector
 	nextID            int
+	Err               error               // when non-nil, Create and Update return this error
 	PrivilegeSelector map[string]string   // privilegeName → selectorID
 	UserSelectors     map[string][]string // userID → []selectorID
 }
@@ -1887,6 +1894,9 @@ func (r *ContentSelectorRepo) GetByName(_ context.Context, name string) (*domain
 func (r *ContentSelectorRepo) Create(_ context.Context, s *domain.ContentSelector) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.Err != nil {
+		return r.Err
+	}
 	r.nextID++
 	s.ID = fmt.Sprintf("cs-%d", r.nextID)
 	cp := *s
@@ -1896,6 +1906,9 @@ func (r *ContentSelectorRepo) Create(_ context.Context, s *domain.ContentSelecto
 func (r *ContentSelectorRepo) Update(_ context.Context, s *domain.ContentSelector) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.Err != nil {
+		return r.Err
+	}
 	cp := *s
 	r.selectors[s.ID] = &cp
 	return nil

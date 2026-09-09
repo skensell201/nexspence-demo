@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/nexspence-oss/nexspence/internal/logger"
 	"github.com/nexspence-oss/nexspence/internal/metrics"
 )
 
@@ -65,7 +66,12 @@ type RepoMetric struct {
 }
 
 // ReposHandler serves GET /api/v1/metrics/repos — top 10 repos by downloads.
-func ReposHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+//
+// A query failure is logged and answered with a fixed message, the way
+// MetricsHandler above deliberately keeps its own query error off the wire: the
+// driver's text names tables and columns, which a metrics reader has no need
+// for and no way to act on.
+func ReposHandler(pool *pgxpool.Pool, log logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := pool.Query(c.Request.Context(), `
 			SELECT r.name, r.format, r.type,
@@ -78,7 +84,8 @@ func ReposHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 			LIMIT 10
 		`)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			log.Errorw("per-repository metrics query failed", "err", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not read repository metrics"})
 			return
 		}
 		defer rows.Close()
@@ -93,7 +100,8 @@ func ReposHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 		rows.Close()
 		if err := rows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			log.Errorw("per-repository metrics query failed", "err", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not read repository metrics"})
 			return
 		}
 		c.JSON(http.StatusOK, result)

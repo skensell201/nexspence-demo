@@ -75,12 +75,12 @@ func (r *ContentSelectorRepo) GetByName(ctx context.Context, name string) (*doma
 
 // Create inserts a new content selector and populates its generated fields.
 func (r *ContentSelectorRepo) Create(ctx context.Context, s *domain.ContentSelector) error {
-	return r.pool.QueryRow(ctx,
+	return translateNameUnique(r.pool.QueryRow(ctx,
 		`INSERT INTO content_selectors (name, description, expression)
 		 VALUES ($1, $2, $3)
 		 RETURNING id, created_at, updated_at`,
 		s.Name, s.Description, s.Expression).
-		Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
+		Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt))
 }
 
 // Update overwrites the content selector identified by s.ID.
@@ -91,6 +91,9 @@ func (r *ContentSelectorRepo) Update(ctx context.Context, s *domain.ContentSelec
 		 WHERE id=$4`,
 		s.Name, s.Description, s.Expression, s.ID)
 	if err != nil {
+		if conflict, ok := nameConflict(err); ok {
+			return conflict
+		}
 		return fmt.Errorf("content_selectors update: %w", err)
 	}
 	if tag.RowsAffected() == 0 {

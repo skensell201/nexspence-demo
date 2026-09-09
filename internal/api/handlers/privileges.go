@@ -64,6 +64,9 @@ func (h *PrivilegeHandler) Create(c *gin.Context) {
 		return
 	}
 	if err := h.repo.Create(c.Request.Context(), &p); err != nil {
+		if conflictOnDuplicateName(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -79,6 +82,9 @@ func (h *PrivilegeHandler) Update(c *gin.Context) {
 	}
 	p.ID = c.Param("id")
 	if err := h.repo.Update(c.Request.Context(), &p); err != nil {
+		if conflictOnDuplicateName(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

@@ -65,12 +65,12 @@ func (r *privilegeRepo) Create(ctx context.Context, p *domain.Privilege) error {
 	if err != nil {
 		return err
 	}
-	return r.db.QueryRow(ctx, `
+	return translateNameUnique(r.db.QueryRow(ctx, `
 		INSERT INTO privileges (name, description, type, attrs, content_selector_id)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, created_at`,
 		p.Name, p.Description, string(p.Type), attrsJSON, p.ContentSelectorID,
-	).Scan(&p.ID, &p.CreatedAt)
+	).Scan(&p.ID, &p.CreatedAt))
 }
 
 func (r *privilegeRepo) Update(ctx context.Context, p *domain.Privilege) error {
@@ -83,7 +83,7 @@ func (r *privilegeRepo) Update(ctx context.Context, p *domain.Privilege) error {
 		WHERE id=$6`,
 		p.Name, p.Description, string(p.Type), attrsJSON, p.ContentSelectorID, p.ID,
 	)
-	return err
+	return translateNameUnique(err)
 }
 
 func (r *privilegeRepo) Delete(ctx context.Context, id string) error {
